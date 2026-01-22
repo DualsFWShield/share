@@ -33,20 +33,31 @@ class AudioKey {
     // --- TRANSMITTER ---
     async transmit(text) {
         this.init();
-        if (this.ctx.state === 'suspended') await this.ctx.resume();
+        // Browser requires user interaction to resume audio context
+        if (this.ctx.state === 'suspended') {
+            await this.ctx.resume();
+        }
 
         // Preamble (Sync)
-        const binary = "10101010" + this.textToBinary(text) + "0000"; // Sync + Data + Tail
+        // 10101010 sync byte + data + constant tail
+        const binary = "10101010" + this.textToBinary(text) + "0000";
+        console.log("Transmitting...", text, binary);
 
         const startTime = this.ctx.currentTime + 0.1;
         const bitDuration = 1 / this.baudRate;
 
         this.osc = this.ctx.createOscillator();
-        this.osc.type = 'sine';
-        this.osc.connect(this.ctx.destination);
+        this.osc.type = 'sine'; // Sine wave is smoothest
+
+        // Add Gain Node to control volume (avoid clipping but ensure audibility)
+        const gainNode = this.ctx.createGain();
+        gainNode.gain.value = 0.5; // 50% volume to prevent distortion
+
+        this.osc.connect(gainNode);
+        gainNode.connect(this.ctx.destination);
 
         // Schedule Frequencies
-        this.osc.frequency.setValueAtTime(this.spaceFreq, startTime); // Start low
+        this.osc.frequency.setValueAtTime(this.spaceFreq, startTime);
 
         for (let i = 0; i < binary.length; i++) {
             const bit = binary[i];
