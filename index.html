@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AetherShare | Secure Serverless File Sharing</title>
+    <!-- QRCode Lib -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
+    <!-- Meta Tags for SEO and Social Sharing -->
+    <meta name="description" content="Share files securely without a server. Encoded directly into the URL.">
+    <meta property="og:title" content="AetherShare">
+    <meta property="og:description" content="Click to view the shared file.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://dualsfwshield.be"> 
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="background-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <main class="app-container glass">
+        
+        <!-- Header -->
+        <header>
+            <h1 class="logo">Aether<span class="highlight">Share</span></h1>
+            <p class="tagline">Serverless. Limitless. Beautiful.</p>
+        </header>
+
+        <!-- SENDER VIEW -->
+        <section id="sender-view" class="view active">
+            <div class="drop-zone" id="drop-zone">
+                <div class="icon-wrapper">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M7 10V9C7 6.23858 9.23858 4 12 4C14.7614 4 17 6.23858 17 9V10C19.2091 10 21 11.7909 21 14C21 15.4806 20.1956 16.8084 19 17.5M7 10C4.79086 10 3 11.7909 3 14C3 15.4806 3.8044 16.8084 5 17.5M7 10C7.33241 10 7.65348 10.0402 7.96024 10.1166M12 12V20M12 12L9 15M12 12L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <h3>Drop your file here</h3>
+                <p>or click to browse</p>
+                <input type="file" id="file-input" hidden>
+            </div>
+            
+            <!-- Quick Access Actions -->
+            <div style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: center;">
+                 <button id="open-audio-btn" class="btn secondary" style="width: auto; padding: 0.5rem 1rem; font-size: 0.9rem;">
+                    📡 Open Audio Receiver
+                </button>
+            </div>
+
+            <div class="options hidden" id="options-panel">
+                <div class="file-info">
+                    <span id="filename">example.png</span>
+                    <span id="filesize">2.4 MB</span>
+                </div>
+                
+                <div class="settings">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="lossy-toggle">
+                        <span class="slider"></span>
+                        <span class="label-text">Allow Lossy Compression (Images)</span>
+                    </label>
+
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="encrypt-toggle">
+                        <span class="slider"></span>
+                        <span class="label-text">Encrypt with Password</span>
+                    </label>
+                    
+                    <div id="password-input-container" class="hidden input-group">
+                        <input type="password" id="sender-password" placeholder="Enter protection password">
+                    </div>
+
+                    <!-- Advanced Toggle -->
+                    <div class="advanced-toggle" id="advanced-toggle-btn">
+                        <span>Advanced Options</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+
+                    <div id="advanced-panel" class="hidden">
+                        <!-- Time Bomb -->
+                        <div class="setting-row">
+                            <label>💣 Time Bomb</label>
+                            <select id="timebomb-select">
+                                <option value="0">Disabled</option>
+                                <option value="5">5 Minutes</option>
+                                <option value="60">1 Hour</option>
+                                <option value="1440">24 Hours</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Vibe Share -->
+                        <div class="setting-row">
+                            <label>🎨 Vibe Share</label>
+                            <select id="vibe-select">
+                                <option value="default">Default</option>
+                                <option value="cyberpunk">Cyberpunk</option>
+                                <option value="sunset">Sunset</option>
+                                <option value="matrix">The Matrix</option>
+                                <option value="zen">Zen Garden</option>
+                            </select>
+                        </div>
+
+                        <!-- Geo Lock -->
+                        <div class="setting-row">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="geo-toggle">
+                                <span class="slider"></span>
+                                <span class="label-text">📍 Geo-Lock (My Location)</span>
+                            </label>
+                        </div>
+                        
+                        <!-- Infinity Beam -->
+                        <div class="setting-row">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="beam-toggle">
+                                <span class="slider"></span>
+                                <span class="label-text">📡 Infinity Beam (P2P / No Limit)</span>
+                            </label>
+                        </div>
+
+                        <!-- Audio Modem (Tx Only in Advanced) -->
+                        <div class="setting-row">
+                            <button id="audio-tx-btn" class="btn icon-only" style="width: 100%; text-align: center;">
+                                🎼 Send Audio Key (Tx)
+                            </button>
+                        </div>
+
+                         <!-- Camouflage -->
+                        <div class="setting-row">
+                            <button id="camo-btn" class="btn icon-only" style="width: 100%; text-align: center;">
+                                🥸 Activate Camouflage
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="camo-trigger" class="hidden"></div>
+                
+                <button id="generate-btn" class="btn primary">Generate Link</button>
+            </div>
+
+            <!-- Audio Interface Modal -->
+            <div id="audio-modal" class="hidden overlay">
+                 <div class="glass modal-content">
+                    <button id="close-audio-btn" class="close-btn">&times;</button>
+                    <h2>Audio Receiver</h2>
+                    <canvas id="audio-visualizer" width="400" height="150"></canvas>
+                    
+                    <div class="data-stream">
+                        <p>Incoming Data Stream:</p>
+                        <div id="stream-output" class="console-output"></div>
+                    </div>
+                    
+                    <div class="controls">
+                        <button id="start-listen-btn" class="btn primary">Start Listening</button>
+                        <button id="stop-listen-btn" class="btn secondary hidden">Stop</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="result hidden" id="result-panel">
+                <div class="url-box">
+                    <input type="text" id="share-url" readonly>
+                    <button id="copy-btn" class="btn icon-only" title="Copy to Clipboard">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    </button>
+                    <button id="qr-btn" class="btn icon-only" title="Show QR Code">
+                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    </button>
+                    <a id="preview-link" href="#" target="_blank" class="btn icon-only" title="Open Link">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                    </a>
+                </div>
+                
+                <div id="qr-container" class="hidden">
+                    <div id="qrcode"></div>
+                </div>
+
+                <p class="status-msg success">Link generated!</p>
+            </div>
+            
+            <div id="progress-container" class="hidden">
+                 <div class="progress-bar"><div class="fill" id="progress-fill"></div></div>
+                 <p id="progress-text">Processing...</p>
+            </div>
+        </section>
+
+        <!-- RECEIVER VIEW -->
+        <section id="receiver-view" class="view">
+            <div class="download-card">
+                <div class="icon-wrapper download-icon">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                </div>
+                <h2>File Received</h2>
+                <div class="file-details">
+                    <p id="recv-filename">Loading...</p>
+                    <p id="recv-filesize">...</p>
+                </div>
+                
+                <div id="decrypt-panel" class="hidden input-group" style="margin-top: 1rem;">
+                    <input type="password" id="decrypt-password" placeholder="Enter password to decrypt">
+                    <button id="decrypt-btn" class="btn primary" style="margin-top: 0.5rem;">Unlock File</button>
+                </div>
+
+                <button id="download-btn" class="btn primary" disabled>Download File</button>
+            </div>
+        </section>
+
+    </main>
+    
+    <!-- PeerJS -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="p2p.js"></script>
+    <script src="audio.js"></script>
+    <script src="features.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
