@@ -396,6 +396,9 @@ input:checked+.slider::before {
     background: #f4f4f4;
     color: #333;
     font-family: 'Georgia', serif;
+    display: block !important;
+    /* Override flex */
+    overflow: auto !important;
 }
 
 .camo-mode .background-orbs,

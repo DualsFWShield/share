@@ -543,6 +543,7 @@ class App {
     }
 
     toggleQR() {
+        if (!this.dom.shareUrl.value) return;
         this.dom.qrContainer.classList.toggle('hidden');
         if (!this.dom.qrContainer.classList.contains('hidden') && this.dom.qrcodeBox.innerHTML === '') {
             new QRCode(this.dom.qrcodeBox, { text: this.dom.shareUrl.value, width: 200, height: 200 });
