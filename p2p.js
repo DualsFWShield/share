@@ -59,25 +59,54 @@ class P2P {
         });
     }
 
-    // SENDER: Send file
-    sendFile(file, extraMeta = {}) {
+    // SENDER: Send file with Chunking (V3)
+    async sendFile(file, extraMeta = {}, onProgress) {
         if (!this.conn) return;
 
-        console.log("SEND: Sending File Meta...");
+        const CHUNK_SIZE = 16 * 1024; // 16KB (Safe for WebRTC)
+        const totalSize = file.size;
+        const totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
 
-        // 1. Send Metadata (small JSON)
+        console.log(`SEND: Starting Chunked Transfer. Size: ${totalSize}, Chunks: ${totalChunks}`);
+
+        // 1. Send Metadata
         this.conn.send({
             type: 'meta',
             filename: file.name,
             size: file.size,
             fileType: file.type,
+            totalChunks: totalChunks,
             ...extraMeta
         });
 
-        // 2. Send Raw Data (Binary)
-        console.log("SEND: Sending Raw Blob...");
-        this.conn.send(file);
-        // PeerJS handles simple Blobs efficiently (no serialization if passed directly)
+        // 2. Send Chunks
+        let offset = 0;
+        let chunkIndex = 0;
+
+        while (offset < totalSize) {
+            const chunk = file.slice(offset, offset + CHUNK_SIZE);
+
+            this.conn.send({
+                type: 'chunk',
+                offset: offset,
+                data: chunk
+            });
+
+            offset += CHUNK_SIZE;
+            chunkIndex++;
+
+            // Update Progress
+            if (onProgress) {
+                const percent = Math.min(100, Math.round((offset / totalSize) * 100));
+                onProgress(percent, offset, totalSize);
+            }
+
+            // Yield to event loop regularly to prevent UI freeze and allow buffer clear
+            // Mobile devices need this to avoid crashing the WebRTC thread
+            if (chunkIndex % 50 === 0) await new Promise(r => setTimeout(r, 10));
+        }
+
+        console.log("SEND: Transfer Complete.");
     }
 
     // RECEIVER: Connect to sender

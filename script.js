@@ -225,7 +225,10 @@ class App {
 
             // Output
             qrContainer: document.getElementById('qr-container'),
-            qrcodeBox: document.getElementById('qrcode')
+            qrcodeBox: document.getElementById('qrcode'),
+
+            // Toast
+            toastContainer: document.getElementById('toast-container')
         };
 
         this.currentFile = null;
@@ -276,7 +279,7 @@ class App {
             if (this.currentFile) {
                 window.audioComp.transmit(this.currentFile.name);
             } else {
-                alert("File required for transmission.");
+                this.showToast("File required for transmission", "error");
             }
         });
 
@@ -376,37 +379,83 @@ class App {
                 header = { filename: decodeURIComponent(parts[2]), size: parts[3], beam: true };
                 this.dom.recvFilename.innerText = "📡 " + header.filename;
                 this.dom.recvFilesize.innerText = "Connecting to peer...";
+                // Initialize Chunking State
+                this.incomingFile = {
+                    chunks: [],
+                    receivedSize: 0,
+                    totalSize: 0,
+                    startTime: 0,
+                    initialized: false
+                };
+
+                // Show Progress Bar
+                this.dom.progressBar.classList.remove('hidden');
+                this.dom.progressFill.style.width = '0%';
+                this.dom.progressText.innerText = 'Waiting for data...';
+
                 window.p2p.init().then(() => {
                     window.p2p.connect(peerId, (data) => {
+                        // Protocol V3: Meta -> Chunks
+
                         if (data.type === 'meta') {
-                            // Store metadata for when file arrives
-                            console.log("Meta received:", data);
+                            console.log("RECV: Meta received:", data);
                             this.receivedHeader = {
                                 filename: data.filename,
-                                size: data.originalSize || data.size, // Use original size if encrypted
+                                size: data.originalSize || data.size,
                                 encrypted: data.encrypted,
                                 salt: data.salt,
                                 iv: data.iv,
                                 beam: true
                             };
-                            this.dom.recvFilename.innerText = (data.encrypted ? "🔒 " : "📡 ") + data.filename;
-                            this.dom.recvFilesize.innerText = "Receiving data...";
-                        }
-                        else if (data.type === 'file') {
-                            this.receivedBlob = new Blob([data.blob]);
-                            // If we didn't get meta first (unlikely due to order), fallback? 
-                            // PeerJS usually guarantees order.
 
-                            if (this.receivedHeader && this.receivedHeader.encrypted) {
-                                this.receivedHeader.payload = null; // We have blob directly
-                                this.dom.recvFilesize.innerText = "Encrypted File Received.";
-                                this.dom.decryptPanel.classList.remove('hidden');
-                                this.dom.decryptBtn.innerText = "Unlock Beam File";
-                                // Decrypt button handler needs to know it's a blob, not base64 payload
-                            } else {
-                                this.dom.recvFilesize.innerText = this.formatSize(this.receivedBlob.size);
-                                this.dom.downloadBtn.disabled = false;
-                                this.dom.downloadBtn.innerText = "Download File";
+                            this.incomingFile.totalSize = data.totalChunks ? data.size : data.size;
+                            this.incomingFile.startTime = Date.now();
+                            this.incomingFile.initialized = true;
+
+                            this.dom.recvFilename.innerText = (data.encrypted ? "🔒 " : "📡 ") + data.filename;
+                            this.dom.recvFilesize.innerText = "Receiving...";
+                        }
+                        else if (data.type === 'chunk') {
+                            // Validate initialization
+                            if (!this.incomingFile.initialized) {
+                                console.warn("Received chunk without meta!");
+                                return;
+                            }
+
+                            // Append Chunk
+                            // data.data is the blob/arraybuffer
+                            this.incomingFile.chunks.push(data.data);
+                            this.incomingFile.receivedSize += data.data.size || data.data.byteLength;
+
+                            // Update UI
+                            const percent = Math.min(100, Math.round((this.incomingFile.receivedSize / this.incomingFile.totalSize) * 100));
+                            this.dom.progressFill.style.width = `${percent}%`;
+                            this.dom.progressText.innerText = `${percent}%`;
+
+                            // Check Completion
+                            if (this.incomingFile.receivedSize >= this.incomingFile.totalSize) {
+                                console.log("RECV: Transfer Complete");
+                                this.dom.progressText.innerText = "Processing...";
+
+                                const finalBlob = new Blob(this.incomingFile.chunks);
+                                this.receivedBlob = finalBlob;
+
+                                // Cleanup memory
+                                this.incomingFile.chunks = [];
+
+                                if (this.receivedHeader && this.receivedHeader.encrypted) {
+                                    this.receivedHeader.payload = null;
+                                    this.dom.recvFilesize.innerText = "Encrypted File Received.";
+                                    this.dom.decryptPanel.classList.remove('hidden');
+                                    this.dom.decryptBtn.innerText = "Unlock Beam File";
+                                } else {
+                                    this.dom.recvFilesize.innerText = this.formatSize(this.receivedBlob.size);
+                                    this.dom.downloadBtn.disabled = false;
+                                    this.dom.downloadBtn.innerText = "Download File";
+                                }
+
+                                // Hide Progress after short delay
+                                setTimeout(() => this.dom.progressBar.classList.add('hidden'), 1000);
                             }
                         }
                     });
@@ -478,7 +527,7 @@ class App {
     async attemptDecryption() {
         if (!this.receivedHeader || !this.receivedHeader.encrypted) return;
         const password = this.dom.decryptPassword.value;
-        if (!password) { alert("Please enter password"); return; }
+        if (!password) { this.showToast("Please enter password", "error"); return; }
         this.dom.decryptBtn.disabled = true;
         this.dom.decryptBtn.innerText = "Decrypting...";
 
@@ -509,7 +558,7 @@ class App {
             this.dom.recvFilename.innerText = this.receivedHeader.filename;
         } catch (e) {
             console.error(e);
-            alert("Decryption failed. Wrong password?");
+            this.showToast("Decryption failed. Wrong password?", "error");
             this.dom.decryptBtn.disabled = false;
             this.dom.decryptBtn.innerText = "Unlock File";
         }
@@ -537,7 +586,7 @@ class App {
                 this.dom.fileInfo.name.innerText = `📦 archive.zip (${fileOrFiles.length} files)`;
             } catch (e) {
                 console.error(e);
-                alert("Failed to zip files");
+                this.showToast("Failed to create zip archive", "error");
                 this.setLoading(false);
                 return;
             } finally {
@@ -609,6 +658,29 @@ class App {
         this.dom.advancedPanel.classList.add('hidden');
     }
 
+    showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+
+        let icon = 'ℹ️';
+        if (type === 'success') icon = '✅';
+        if (type === 'error') icon = '❌';
+
+        toast.innerHTML = `<i>${icon}</i> <span>${message}</span>`;
+
+        this.dom.toastContainer.appendChild(toast);
+
+        // Trigger reflow
+        void toast.offsetWidth;
+
+        toast.classList.add('visible');
+
+        setTimeout(() => {
+            toast.classList.remove('visible');
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
     async generateLink() {
         if (!this.currentFile) return;
         this.setLoading(true, "Processing...");
@@ -624,10 +696,20 @@ class App {
                     const statusMsg = document.querySelector('.status-msg');
                     if (statusMsg) statusMsg.innerText = "🚀 Sending file...";
 
-                    window.p2p.sendFile(this.currentFile);
-                    this.setLoading(false); // Ensure loader is off
-                    alert("File transferred via Beam!");
-                    if (statusMsg) statusMsg.innerText = "✅ Transfer Complete!";
+                    // Show Progress
+                    this.dom.progressBar.classList.remove('hidden');
+                    this.dom.progressFill.style.width = '0%';
+
+                    window.p2p.sendFile(this.currentFile, {}, (percent) => {
+                        this.dom.progressFill.style.width = `${percent}%`;
+                        this.dom.progressText.innerText = `${percent}%`;
+                        if (statusMsg) statusMsg.innerText = `🚀 Sending... ${percent}%`;
+                    }).then(() => {
+                        this.setLoading(false);
+                        alert("File transferred via Beam!");
+                        if (statusMsg) statusMsg.innerText = "✅ Transfer Complete!";
+                        setTimeout(() => this.dom.progressBar.classList.add('hidden'), 2000);
+                    });
                 });
 
                 const safeFilename = encodeURIComponent(this.currentFile.name);
