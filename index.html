@@ -7,6 +7,7 @@
     <title>AetherShare | Secure Serverless File Sharing</title>
     <!-- QRCode Lib -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
     <!-- Meta Tags for SEO and Social Sharing -->
     <meta name="description" content="Share files securely without a server. Encoded directly into the URL.">
@@ -52,7 +53,7 @@
                 </div>
                 <h3>Drop your file here</h3>
                 <p>or click to browse</p>
-                <input type="file" id="file-input" hidden>
+                <input type="file" id="file-input" multiple hidden>
             </div>
 
             <!-- Quick Access Actions -->

@@ -156,6 +156,15 @@ class Encoder {
     static base64ToBuffer(base64) {
         return Uint8Array.from(atob(base64), c => c.charCodeAt(0));
     }
+
+    // Unicode-safe String Base64
+    static stringToBase64(str) {
+        return this.bufferToBase64(new TextEncoder().encode(str));
+    }
+
+    static base64ToString(base64) {
+        return new TextDecoder().decode(this.base64ToBuffer(base64));
+    }
 }
 
 class App {
@@ -231,7 +240,7 @@ class App {
 
         // Sender Events
         this.dom.dropZone.addEventListener('click', () => this.dom.fileInput.click());
-        this.dom.fileInput.addEventListener('change', (e) => this.handleFileSelect(e.target.files[0]));
+        this.dom.fileInput.addEventListener('change', (e) => this.handleFileSelect(e.target.files));
 
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
             this.dom.dropZone.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); });
@@ -240,7 +249,7 @@ class App {
         this.dom.dropZone.addEventListener('dragleave', () => this.dom.dropZone.classList.remove('drag-over'));
         this.dom.dropZone.addEventListener('drop', (e) => {
             this.dom.dropZone.classList.remove('drag-over');
-            this.handleFileSelect(e.dataTransfer.files[0]);
+            this.handleFileSelect(e.dataTransfer.files);
         });
 
         this.dom.generateBtn.addEventListener('click', () => this.generateLink());
@@ -404,7 +413,7 @@ class App {
                 return;
             } else if (hash.startsWith('AETHER|')) {
                 const parts = hash.split('|');
-                header = JSON.parse(atob(parts[1]));
+                header = JSON.parse(Encoder.base64ToString(parts[1]));
                 payload = parts[2];
             } else {
                 const parts = hash.split('|');
@@ -505,19 +514,75 @@ class App {
         }
     }
 
-    handleFileSelect(file) {
-        if (!file) return;
-        this.currentFile = file;
-        this.dom.fileInfo.name.innerText = file.name;
-        this.dom.fileInfo.size.innerText = this.formatSize(file.size);
+    async handleFileSelect(fileOrFiles) {
+        if (!fileOrFiles) return;
+
+        // Handle Multiple Files
+        let fileToProcess = fileOrFiles;
+
+        // Check if argument is a FileList or array (from multiple input) or single File
+        const isMultiple = (fileOrFiles instanceof FileList || Array.isArray(fileOrFiles)) && fileOrFiles.length > 1;
+
+        if (isMultiple) {
+            this.setLoading(true, "Zipping files...");
+            try {
+                const zip = new JSZip();
+                for (let i = 0; i < fileOrFiles.length; i++) {
+                    zip.file(fileOrFiles[i].name, fileOrFiles[i]);
+                }
+                const zipBlob = await zip.generateAsync({ type: "blob" });
+                // Create a "File" object from the blob to keep interface consistent
+                fileToProcess = new File([zipBlob], "archive.zip", { type: "application/zip" });
+                this.dom.fileInfo.name.innerText = `📦 archive.zip (${fileOrFiles.length} files)`;
+            } catch (e) {
+                console.error(e);
+                alert("Failed to zip files");
+                this.setLoading(false);
+                return;
+            } finally {
+                this.setLoading(false);
+            }
+        } else {
+            // Single file logic (normalize input)
+            if (fileOrFiles instanceof FileList) fileToProcess = fileOrFiles[0];
+            this.dom.fileInfo.name.innerText = fileToProcess.name;
+        }
+
+        this.currentFile = fileToProcess;
+        this.dom.fileInfo.size.innerText = this.formatSize(fileToProcess.size);
         this.dom.optionsPanel.classList.remove('hidden');
         this.dom.resultPanel.classList.add('hidden');
-        if (file.type.startsWith('image/')) {
+
+        // Lossy Toggle only for single images
+        if (!isMultiple && fileToProcess.type.startsWith('image/')) {
             this.dom.lossyToggle.parentElement.classList.remove('hidden');
             this.dom.lossyToggle.checked = true;
         } else {
             this.dom.lossyToggle.parentElement.classList.add('hidden');
             this.dom.lossyToggle.checked = false;
+        }
+
+        this.checkSizeLimit();
+    }
+
+    checkSizeLimit() {
+        if (!this.currentFile) return;
+        const size = this.currentFile.size;
+        const isBeam = this.dom.beamToggle.checked;
+        const warning = document.getElementById('size-warning');
+
+        // Limit for URL Hash ~30KB safe
+        if (!isBeam && size > 30 * 1024) {
+            if (warning) {
+                warning.classList.remove('hidden');
+                warning.innerText = `⚠️ Too large for URL (Max ~30KB). Enable Infinity Beam for unlimited size.`;
+            }
+            this.dom.generateBtn.disabled = true;
+            this.dom.generateBtn.title = "File too large for URL sharing";
+        } else {
+            if (warning) warning.classList.add('hidden');
+            this.dom.generateBtn.disabled = false;
+            this.dom.generateBtn.title = "";
         }
     }
 
@@ -609,7 +674,7 @@ class App {
                     payloadBase64 = await Encoder.fileToBase64(compressedBlob);
                 }
 
-                const headerBase64 = btoa(JSON.stringify(header));
+                const headerBase64 = Encoder.stringToBase64(JSON.stringify(header));
                 const hashData = `AETHER|${headerBase64}|${payloadBase64}`;
                 this.showResult(hashData);
 

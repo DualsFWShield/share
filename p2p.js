@@ -25,8 +25,18 @@ class P2P {
             });
 
             this.peer.on('error', (err) => {
-                console.error(err);
-                reject(err);
+                console.error("PeerJS Error:", err);
+                // Dont reject immediately if it's just a disconnect, try to recover or let UI handle
+                if (err.type === 'peer-unavailable') {
+                    reject(new Error("Peer unavailable. Try refreshing."));
+                } else if (err.type !== 'disconnected') {
+                    reject(err);
+                }
+            });
+
+            this.peer.on('disconnected', () => {
+                console.log("Peer Disconnected. Attempting reconnect...");
+                this.peer.reconnect();
             });
         });
     }
@@ -53,19 +63,21 @@ class P2P {
     sendFile(file, extraMeta = {}) {
         if (!this.conn) return;
 
-        // PeerJS handles binary serialization automatically
+        console.log("SEND: Sending File Meta...");
+
+        // 1. Send Metadata (small JSON)
         this.conn.send({
             type: 'meta',
-            filename: file.name, // Accessing name might fail if 'file' is just a Blob, sender should ensure this if needed, or pass name in extraMeta
+            filename: file.name,
             size: file.size,
             fileType: file.type,
             ...extraMeta
         });
 
-        this.conn.send({
-            type: 'file',
-            blob: file
-        });
+        // 2. Send Raw Data (Binary)
+        console.log("SEND: Sending Raw Blob...");
+        this.conn.send(file);
+        // PeerJS handles simple Blobs efficiently (no serialization if passed directly)
     }
 
     // RECEIVER: Connect to sender
