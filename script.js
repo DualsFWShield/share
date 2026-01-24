@@ -642,15 +642,16 @@ class App {
             else beamInfo.classList.add('hidden');
         }
 
-        // Limit for URL Hash ~30KB safe
+        // Limit for URL Hash ~30KB safe (Warning ONLY)
         if (!isBeam && size > 30 * 1024) {
             if (warning) {
                 warning.classList.remove('hidden');
-                warning.innerText = `⚠️ Too large for URL (Max ~30KB). Enable Infinity Beam for unlimited size.`;
+                warning.innerText = `⚠️ Large file (>30KB). Link might be too long for some browsers.`;
             }
-            this.dom.generateBtn.disabled = true;
-            this.dom.generateBtn.title = "File too large for URL sharing";
-            this.dom.generateBtn.classList.add('disabled-look'); // Optional styling
+            // We do NOT disable the button anymore per user request
+            this.dom.generateBtn.disabled = false;
+            this.dom.generateBtn.title = "Large file - URL might break";
+            this.dom.generateBtn.classList.remove('disabled-look');
         } else {
             if (warning) warning.classList.add('hidden');
             this.dom.generateBtn.disabled = false;
