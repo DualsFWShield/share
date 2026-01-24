@@ -402,6 +402,7 @@ class App {
                             this.receivedHeader = {
                                 filename: data.filename,
                                 size: data.originalSize || data.size,
+                                fileType: data.fileType || 'application/octet-stream', // Capture MIME
                                 encrypted: data.encrypted,
                                 salt: data.salt,
                                 iv: data.iv,
@@ -437,7 +438,7 @@ class App {
                                 console.log("RECV: Transfer Complete");
                                 this.dom.progressText.innerText = "Processing...";
 
-                                const finalBlob = new Blob(this.incomingFile.chunks);
+                                const finalBlob = new Blob(this.incomingFile.chunks, { type: this.receivedHeader.fileType });
                                 this.receivedBlob = finalBlob;
 
                                 // Cleanup memory
@@ -706,7 +707,7 @@ class App {
                         if (statusMsg) statusMsg.innerText = `🚀 Sending... ${percent}%`;
                     }).then(() => {
                         this.setLoading(false);
-                        alert("File transferred via Beam!");
+                        this.showToast("File transferred successfully!", "success");
                         if (statusMsg) statusMsg.innerText = "✅ Transfer Complete!";
                         setTimeout(() => this.dom.progressBar.classList.add('hidden'), 2000);
                     });
@@ -722,7 +723,7 @@ class App {
 
             } catch (err) {
                 console.error(err);
-                alert("Infinity Beam Error: " + err.message);
+                this.showToast("Infinity Beam Error: " + err.message, "error");
             } finally {
                 this.setLoading(false);
             }
