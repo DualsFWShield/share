@@ -391,68 +391,155 @@ input:checked+.slider::before {
     width: 100%;
 }
 
-/* --- Camouflage Mode (Fake News Site) --- */
+/* --- Camouflage Mode (Fake Excel) --- */
 .camo-mode {
-    background: #f4f4f4;
-    color: #333;
-    font-family: 'Georgia', serif;
+    background: #fff !important;
+    color: #000 !important;
+    font-family: 'Segoe UI', Arial, sans-serif !important;
     display: block !important;
-    /* Override flex */
-    overflow: auto !important;
+    overflow: hidden !important;
 }
 
-.camo-mode .background-orbs,
-.camo-mode .glass,
-.camo-mode header,
-.camo-mode .app-container {
-    background: transparent !important;
-    backdrop-filter: none !important;
-    box-shadow: none !important;
-    border: none !important;
+#camouflage-layer {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+    background: #fff;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 9999;
 }
 
-.camo-mode header,
-.camo-mode .view {
-    display: none !important;
+.spreadsheet-header {
+    background: #217346;
+    color: white;
+    padding: 8px 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
 }
 
-.camo-mode body::before {
-    content: "Daily News";
-    font-size: 3rem;
-    font-weight: bold;
-    text-align: center;
-    display: block;
-    margin-top: 2rem;
+.window-controls span {
+    margin-left: 15px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.spreadsheet-toolbar {
+    background: #f3f2f1;
+    border-bottom: 1px solid #e1e1e1;
+    padding: 10px 15px;
+    font-size: 14px;
+    color: #444;
+}
+
+.spreadsheet-toolbar span {
+    margin-right: 20px;
+    cursor: pointer;
+}
+
+.spreadsheet-toolbar span:first-child {
+    background: #217346;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 2px;
+}
+
+.spreadsheet-formula-bar {
+    display: flex;
+    align-items: center;
+    padding: 5px;
+    background: #ffffff;
+    border-bottom: 1px solid #e1e1e1;
+}
+
+.spreadsheet-formula-bar .fx {
+    font-family: serif;
+    font-style: italic;
+    color: #666;
+    padding: 0 10px;
+    border-right: 1px solid #e1e1e1;
+}
+
+.spreadsheet-formula-bar input {
+    border: none;
+    flex: 1;
+    padding: 2px 10px;
+    outline: none;
+    font-family: inherit;
+    font-size: 14px;
+}
+
+.spreadsheet-content {
+    flex: 1;
+    overflow: auto;
+    background: #fff;
+    position: relative;
+}
+
+.spreadsheet-content table {
+    border-collapse: collapse;
     width: 100%;
-    border-bottom: 2px solid #ccc;
-    padding-bottom: 1rem;
+    table-layout: fixed;
+}
+
+.spreadsheet-content th,
+.spreadsheet-content td {
+    border: 1px solid #e1e1e1;
+    padding: 4px 8px;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.spreadsheet-content th {
+    background: #f8f9fa;
+    color: #666;
+    font-weight: normal;
+    text-align: center;
+}
+
+.spreadsheet-content td {
+    text-align: right;
     color: #000;
 }
 
-.camo-mode body::after {
-    content: "BREAKING: Scientists discover new species of cat that loves coding. Click here to read more.";
-    display: block;
-    margin: 2rem auto;
-    max-width: 600px;
-    font-size: 1.2rem;
-    line-height: 1.6;
-    padding: 1rem;
-    background: #fff;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-    cursor: pointer;
+.spreadsheet-content td:nth-child(2),
+.spreadsheet-content td:nth-child(6) {
+    text-align: left;
+    /* Align text columns left */
 }
 
-/* Secret trigger overlay - covers the fake article */
-.camo-mode #camo-trigger {
-    display: block !important;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 9999;
+/* Exit trigger stealth */
+#camo-exit-trigger {
+    cursor: cell;
+    /* Looks normal */
+}
+
+/* Footer tabs */
+.spreadsheet-footer {
+    background: #f8f9fa;
+    border-top: 1px solid #e1e1e1;
+    padding-left: 10px;
+    display: flex;
+}
+
+.spreadsheet-footer .tab {
+    padding: 5px 15px;
+    font-size: 12px;
+    color: #666;
     cursor: pointer;
-    opacity: 0;
+    border-right: 1px solid #e1e1e1;
+}
+
+.spreadsheet-footer .tab.active {
+    background: #fff;
+    color: #217346;
+    border-top: 2px solid #217346;
+    font-weight: 600;
 }
 
 /* --- Advanced Options --- */
@@ -667,5 +754,157 @@ select {
     .orb-1,
     .orb-2 {
         opacity: 0.4;
+    }
+}
+
+/* --- AetherChat UI --- */
+.chat-fab {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: var(--primary);
+    border: none;
+    font-size: 2rem;
+    cursor: pointer;
+    box-shadow: 0 0 20px var(--primary-glow);
+    z-index: 9000;
+    transition: transform 0.3s;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.chat-fab:hover {
+    transform: scale(1.1);
+}
+
+.chat-panel {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    width: 320px;
+    height: 450px;
+    background: rgba(15, 17, 26, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+    z-index: 9001;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.chat-header {
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.chat-header span {
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.chat-header small {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    margin-left: 0.5rem;
+    font-weight: normal;
+}
+
+.close-btn-mini {
+    cursor: pointer;
+    font-size: 1.2rem;
+    color: var(--text-muted);
+}
+
+.chat-messages {
+    flex: 1;
+    padding: 1rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.chat-msg {
+    padding: 0.5rem 0.8rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    max-width: 85%;
+    word-wrap: break-word;
+}
+
+.chat-msg.me {
+    background: var(--secondary);
+    align-self: flex-end;
+    color: white;
+}
+
+.chat-msg.other {
+    background: rgba(255, 255, 255, 0.1);
+    align-self: flex-start;
+}
+
+.chat-msg.system {
+    align-self: center;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px solid var(--glass-border);
+}
+
+.chat-input-area {
+    padding: 0.8rem;
+    display: flex;
+    gap: 0.5rem;
+    border-top: 1px solid var(--glass-border);
+}
+
+.chat-input-area input {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    padding: 0.5rem;
+    color: white;
+    outline: none;
+}
+
+.chat-status {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    padding: 0.2rem 1rem 0.5rem;
+    text-align: right;
+}
+
+/* Mobile responsive */
+@media (max-width: 480px) {
+    .chat-panel {
+        width: 100%;
+        height: 100%;
+        bottom: 0;
+        right: 0;
+        border-radius: 0;
     }
 }

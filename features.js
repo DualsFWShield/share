@@ -86,14 +86,55 @@ class Features {
 
     // --- CAMOUFLAGE ---
     static toggleCamouflage(enable) {
+        const app = document.querySelector('.app-container');
+        const bg = document.querySelector('.background-orbs');
+        const layer = document.getElementById('camouflage-layer');
+
         if (enable) {
             document.body.classList.add('camo-mode');
-            // Change title to look fake
-            document.title = "Daily News | Top 10 Recipes for 2026";
-            // Swap favicon if possible (advanced)
+            app.classList.add('hidden');
+            bg.classList.add('hidden');
+            layer.classList.remove('hidden');
+            document.title = "Q4 Financial Overview_2025.xlsx - Excel";
+
+            // Setup exit triggers
+            this.setupCamoExit();
         } else {
             document.body.classList.remove('camo-mode');
+            app.classList.remove('hidden');
+            bg.classList.remove('hidden');
+            layer.classList.add('hidden');
             document.title = "AetherShare | Secure Serverless File Sharing";
         }
+    }
+
+    static setupCamoExit() {
+        if (this.camoInitialized) return;
+        this.camoInitialized = true;
+
+        const exitTrigger = document.getElementById('camo-exit-trigger');
+        if (exitTrigger) {
+            exitTrigger.addEventListener('dblclick', () => this.toggleCamouflage(false));
+        }
+
+        // Escape Key Sequence (3x Esc to exit)
+        let escCount = 0;
+        let escTimer = null;
+
+        document.addEventListener('keydown', (e) => {
+            if (!document.body.classList.contains('camo-mode')) return;
+
+            if (e.key === 'Escape') {
+                escCount++;
+                if (escTimer) clearTimeout(escTimer);
+
+                escTimer = setTimeout(() => { escCount = 0; }, 500); // Reset if too slow
+
+                if (escCount >= 3) {
+                    this.toggleCamouflage(false);
+                    escCount = 0;
+                }
+            }
+        });
     }
 }

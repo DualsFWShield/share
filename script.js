@@ -118,6 +118,37 @@ class Encoder {
         return new Blob([decryptedBuffer]);
     }
 
+    static async encryptBlob(blob, password) {
+        const salt = window.crypto.getRandomValues(new Uint8Array(16));
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const key = await this.deriveKey(password, salt);
+
+        const fileBuffer = await blob.arrayBuffer();
+        const encryptedBuffer = await window.crypto.subtle.encrypt(
+            { name: "AES-GCM", iv: iv }, key, fileBuffer
+        );
+
+        return {
+            salt: this.bufferToBase64(salt),
+            iv: this.bufferToBase64(iv),
+            blob: new Blob([encryptedBuffer])
+        };
+    }
+
+    static async decryptBlob(encryptedBlob, password, base64Salt, base64Iv) {
+        const salt = this.base64ToBuffer(base64Salt);
+        const iv = this.base64ToBuffer(base64Iv);
+        const encryptedBuffer = await encryptedBlob.arrayBuffer();
+
+        const key = await this.deriveKey(password, salt);
+
+        const decryptedBuffer = await window.crypto.subtle.decrypt(
+            { name: "AES-GCM", iv: iv }, key, encryptedBuffer
+        );
+
+        return new Blob([decryptedBuffer]);
+    }
+
     static bufferToBase64(buffer) {
         return btoa(String.fromCharCode(...new Uint8Array(buffer)));
     }
@@ -337,11 +368,36 @@ class App {
                 this.dom.recvFilesize.innerText = "Connecting to peer...";
                 window.p2p.init().then(() => {
                     window.p2p.connect(peerId, (data) => {
-                        if (data.type === 'file') {
+                        if (data.type === 'meta') {
+                            // Store metadata for when file arrives
+                            console.log("Meta received:", data);
+                            this.receivedHeader = {
+                                filename: data.filename,
+                                size: data.originalSize || data.size, // Use original size if encrypted
+                                encrypted: data.encrypted,
+                                salt: data.salt,
+                                iv: data.iv,
+                                beam: true
+                            };
+                            this.dom.recvFilename.innerText = (data.encrypted ? "🔒 " : "📡 ") + data.filename;
+                            this.dom.recvFilesize.innerText = "Receiving data...";
+                        }
+                        else if (data.type === 'file') {
                             this.receivedBlob = new Blob([data.blob]);
-                            this.dom.recvFilesize.innerText = this.formatSize(this.receivedBlob.size);
-                            this.dom.downloadBtn.disabled = false;
-                            this.dom.downloadBtn.innerText = "Download File";
+                            // If we didn't get meta first (unlikely due to order), fallback? 
+                            // PeerJS usually guarantees order.
+
+                            if (this.receivedHeader && this.receivedHeader.encrypted) {
+                                this.receivedHeader.payload = null; // We have blob directly
+                                this.dom.recvFilesize.innerText = "Encrypted File Received.";
+                                this.dom.decryptPanel.classList.remove('hidden');
+                                this.dom.decryptBtn.innerText = "Unlock Beam File";
+                                // Decrypt button handler needs to know it's a blob, not base64 payload
+                            } else {
+                                this.dom.recvFilesize.innerText = this.formatSize(this.receivedBlob.size);
+                                this.dom.downloadBtn.disabled = false;
+                                this.dom.downloadBtn.innerText = "Download File";
+                            }
                         }
                     });
                 });
@@ -417,19 +473,33 @@ class App {
         this.dom.decryptBtn.innerText = "Decrypting...";
 
         try {
-            const decryptedBlob = await Encoder.decrypt(
-                this.receivedHeader.payload, password, this.receivedHeader.salt, this.receivedHeader.iv
-            );
-            const originalBlob = await Encoder.decompressBlob(decryptedBlob);
-            this.receivedBlob = originalBlob;
-            this.dom.recvFilesize.innerText = this.formatSize(originalBlob.size);
+            if (this.receivedHeader.beam) {
+                // Beam Decryption (Blob based)
+                const decryptedBlob = await Encoder.decryptBlob(
+                    this.receivedBlob, password, this.receivedHeader.salt, this.receivedHeader.iv
+                );
+                this.receivedBlob = decryptedBlob;
+            } else {
+                // Legacy/Aether Decryption (Base64 based)
+                const decryptedBlob = await Encoder.decrypt(
+                    this.receivedHeader.payload, password, this.receivedHeader.salt, this.receivedHeader.iv
+                );
+                // Aether also compresses, Beam currently sends raw encrypted blob (not compressed again inside encryption?) 
+                // Wait, logic says sendFile uses currentFile directly.
+                // Assuming Beam doesn't compress for now or handled differently.
+                // If Aether, we decompress after decrypt.
+                const originalBlob = await Encoder.decompressBlob(decryptedBlob);
+                this.receivedBlob = originalBlob;
+            }
+
+            this.dom.recvFilesize.innerText = this.formatSize(this.receivedBlob.size);
             this.dom.downloadBtn.disabled = false;
             this.dom.downloadBtn.innerText = "Download File";
             this.dom.decryptPanel.classList.add('hidden');
             this.dom.recvFilename.innerText = this.receivedHeader.filename;
         } catch (e) {
             console.error(e);
-            alert("Decryption failed.");
+            alert("Decryption failed. Wrong password?");
             this.dom.decryptBtn.disabled = false;
             this.dom.decryptBtn.innerText = "Unlock File";
         }
@@ -470,16 +540,35 @@ class App {
 
         if (this.dom.beamToggle.checked) {
             this.setLoading(true, "Initializing Beam...");
-            const peerId = await window.p2p.init();
-            window.p2p.waitForReceiver(() => {
-                window.p2p.sendFile(this.currentFile);
+            try {
+                const peerId = await window.p2p.init();
+                if (!peerId) throw new Error("Failed to initialize P2P Network.");
+
+                window.p2p.waitForReceiver(() => {
+                    // Visual feedback that transfer started/finished
+                    const statusMsg = document.querySelector('.status-msg');
+                    if (statusMsg) statusMsg.innerText = "🚀 Sending file...";
+
+                    window.p2p.sendFile(this.currentFile);
+                    this.setLoading(false); // Ensure loader is off
+                    alert("File transferred via Beam!");
+                    if (statusMsg) statusMsg.innerText = "✅ Transfer Complete!";
+                });
+
+                const safeFilename = encodeURIComponent(this.currentFile.name);
+                const hashData = `BEAM|${peerId}|${safeFilename}|${this.currentFile.size}`;
+                this.showResult(hashData);
+
+                // Update text to indicate waiting state
+                const statusMsg = document.querySelector('.status-msg');
+                if (statusMsg) statusMsg.innerText = "📡 Beam Active: Waiting for receiver...";
+
+            } catch (err) {
+                console.error(err);
+                alert("Infinity Beam Error: " + err.message);
+            } finally {
                 this.setLoading(false);
-                alert("File transferred via Beam!");
-            });
-            const safeFilename = encodeURIComponent(this.currentFile.name);
-            const hashData = `BEAM|${peerId}|${safeFilename}|${this.currentFile.size}`;
-            this.showResult(hashData);
-            this.setLoading(false);
+            }
             return;
         }
 

@@ -12,7 +12,7 @@ class P2P {
 
     // Initialize PeerJS (CDN required in index.html)
     async init() {
-        if (this.peer) return; // Already init
+        if (this.peer) return this.peerId; // Return ID if already init
 
         return new Promise((resolve, reject) => {
             // Using default PeerJS cloud server (free tier)
@@ -35,6 +35,9 @@ class P2P {
     waitForReceiver(onConnection) {
         if (!this.peer) return;
 
+        // cleanup previous listeners to avoid duplicates if button clicked multiple times
+        this.peer.off('connection');
+
         this.peer.on('connection', (conn) => {
             this.conn = conn;
             console.log("Receiver connected!");
@@ -47,15 +50,16 @@ class P2P {
     }
 
     // SENDER: Send file
-    sendFile(file) {
+    sendFile(file, extraMeta = {}) {
         if (!this.conn) return;
 
         // PeerJS handles binary serialization automatically
         this.conn.send({
             type: 'meta',
-            filename: file.name,
+            filename: file.name, // Accessing name might fail if 'file' is just a Blob, sender should ensure this if needed, or pass name in extraMeta
             size: file.size,
-            type: file.type
+            fileType: file.type,
+            ...extraMeta
         });
 
         this.conn.send({
