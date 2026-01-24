@@ -12,23 +12,27 @@ class P2P {
 
     // Initialize PeerJS (CDN required in index.html)
     async init() {
-        if (this.peer) return this.peerId; // Return ID if already init
+        if (this.peer) return this.peerId;
 
         return new Promise((resolve, reject) => {
-            // Using default PeerJS cloud server (free tier)
-            // Configuration ICE (STUN/TURN) pour traverser les routeurs (NAT)
-            // L'ajout de serveurs STUN de Google améliore la connectivité hors local
-            this.peer = new Peer({
+            // Configuration robuste pour traverser les NATs (STUN)
+            // Note: Sans serveur TURN, les NATs symétriques bloqueront toujours la connexion.
+            const config = {
+                debug: 2, // Affiche les erreurs dans la console
                 config: {
                     iceServers: [
                         { urls: 'stun:stun.l.google.com:19302' },
                         { urls: 'stun:stun1.l.google.com:19302' },
                         { urls: 'stun:stun2.l.google.com:19302' },
                         { urls: 'stun:stun3.l.google.com:19302' },
-                        { urls: 'stun:stun4.l.google.com:19302' }
+                        { urls: 'stun:stun4.l.google.com:19302' },
+                        { urls: 'stun:stun.services.mozilla.com' },
+                        { urls: 'stun:global.stun.twilio.com:3478' }
                     ]
                 }
-            });
+            };
+
+            this.peer = new Peer(config);
 
             this.peer.on('open', (id) => {
                 this.peerId = id;
@@ -38,26 +42,23 @@ class P2P {
 
             this.peer.on('error', (err) => {
                 console.error("PeerJS Error:", err);
-                // Dont reject immediately if it's just a disconnect, try to recover or let UI handle
-                if (err.type === 'peer-unavailable') {
-                    reject(new Error("Peer unavailable. Try refreshing."));
-                } else if (err.type !== 'disconnected') {
+                // Si l'ID est déjà pris ou erreur fatale
+                if (['invalid-id', 'unavailable-id'].includes(err.type)) {
                     reject(err);
                 }
             });
 
             this.peer.on('disconnected', () => {
                 console.log("Peer Disconnected. Attempting reconnect...");
-                this.peer.reconnect();
+                try { this.peer.reconnect(); } catch (e) { console.error(e); }
             });
         });
     }
 
     // SENDER: Wait for connection
-    waitForReceiver(onConnection) {
+    waitForReceiver(onConnection, onError) {
         if (!this.peer) return;
 
-        // cleanup previous listeners to avoid duplicates if button clicked multiple times
         this.peer.off('connection');
 
         this.peer.on('connection', (conn) => {
@@ -66,7 +67,15 @@ class P2P {
 
             conn.on('open', () => {
                 onConnection();
-                // Send metadata first?
+            });
+
+            conn.on('error', (err) => {
+                console.error("Connection Error (Sender):", err);
+                if (onError) onError(err);
+            });
+
+            conn.on('close', () => {
+                console.log("Connection Closed");
             });
         });
     }
@@ -81,51 +90,57 @@ class P2P {
 
         console.log(`SEND: Starting Chunked Transfer. Size: ${totalSize}, Chunks: ${totalChunks}`);
 
-        // 1. Send Metadata
-        this.conn.send({
-            type: 'meta',
-            filename: file.name,
-            size: file.size,
-            fileType: file.type,
-            totalChunks: totalChunks,
-            ...extraMeta
-        });
-
-        // 2. Send Chunks
-        let offset = 0;
-        let chunkIndex = 0;
-
-        while (offset < totalSize) {
-            const chunk = file.slice(offset, offset + CHUNK_SIZE);
-
+        try {
+            // 1. Send Metadata
             this.conn.send({
-                type: 'chunk',
-                offset: offset,
-                data: chunk
+                type: 'meta',
+                filename: file.name,
+                size: file.size,
+                fileType: file.type,
+                totalChunks: totalChunks,
+                ...extraMeta
             });
 
-            offset += CHUNK_SIZE;
-            chunkIndex++;
+            // 2. Send Chunks
+            let offset = 0;
+            let chunkIndex = 0;
 
-            // Update Progress
-            if (onProgress) {
-                const percent = Math.min(100, Math.round((offset / totalSize) * 100));
-                onProgress(percent, offset, totalSize);
+            while (offset < totalSize) {
+                const chunk = file.slice(offset, offset + CHUNK_SIZE);
+
+                this.conn.send({
+                    type: 'chunk',
+                    offset: offset,
+                    data: chunk
+                });
+
+                offset += CHUNK_SIZE;
+                chunkIndex++;
+
+                // Update Progress
+                if (onProgress) {
+                    const percent = Math.min(100, Math.round((offset / totalSize) * 100));
+                    onProgress(percent, offset, totalSize);
+                }
+
+                // Yield to event loop regularly
+                if (chunkIndex % 50 === 0) await new Promise(r => setTimeout(r, 10));
             }
-
-            // Yield to event loop regularly to prevent UI freeze and allow buffer clear
-            // Mobile devices need this to avoid crashing the WebRTC thread
-            if (chunkIndex % 50 === 0) await new Promise(r => setTimeout(r, 10));
+            console.log("SEND: Transfer Complete.");
+        } catch (e) {
+            console.error("Send Error:", e);
+            throw e;
         }
-
-        console.log("SEND: Transfer Complete.");
     }
 
     // RECEIVER: Connect to sender
-    connect(hostId, onData) {
+    connect(hostId, onData, onError) {
         if (!this.peer) return;
 
-        this.conn = this.peer.connect(hostId);
+        console.log("Connecting to Peer:", hostId);
+
+        // Reliable: true est par défaut, mais explicite pour être sûr
+        this.conn = this.peer.connect(hostId, { reliable: true });
 
         this.conn.on('open', () => {
             console.log("Connected to Sender");
@@ -133,6 +148,16 @@ class P2P {
 
         this.conn.on('data', (data) => {
             onData(data);
+        });
+
+        this.conn.on('error', (err) => {
+            console.error("Connection Error (Receiver):", err);
+            if (onError) onError(err);
+        });
+
+        this.conn.on('close', () => {
+            console.log("Connection Closed (Receiver)");
+            if (onError) onError(new Error("Connection closed by remote peer."));
         });
     }
 }

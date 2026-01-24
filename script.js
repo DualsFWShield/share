@@ -394,8 +394,16 @@ class App {
                 this.dom.progressText.innerText = 'Waiting for data...';
 
                 window.p2p.init().then(() => {
+                    // Connection Timeout Guard
+                    const connectionTimeout = setTimeout(() => {
+                        this.dom.recvFilesize.innerText = "Connection taking too long... (NAT Issue?)";
+                        this.showToast("Connection is slow. Are you on a restricted network?", "info");
+                    }, 15000);
+
                     window.p2p.connect(peerId, (data) => {
                         // Protocol V3: Meta -> Chunks
+                        // Clear timeout on first data or successful connect (technically open event clears prompt via status update)
+                        clearTimeout(connectionTimeout);
 
                         if (data.type === 'meta') {
                             console.log("RECV: Meta received:", data);
@@ -459,6 +467,11 @@ class App {
                                 setTimeout(() => this.dom.progressBar.classList.add('hidden'), 1000);
                             }
                         }
+                    }, (err) => {
+                        clearTimeout(connectionTimeout);
+                        console.error("P2P Receiver Error:", err);
+                        this.dom.recvFilesize.innerText = "Connection Failed. Refresh?";
+                        this.showToast("P2P Error: " + (err.message || err), "error");
                     });
                 });
                 return;
@@ -711,6 +724,11 @@ class App {
                         if (statusMsg) statusMsg.innerText = "✅ Transfer Complete!";
                         setTimeout(() => this.dom.progressBar.classList.add('hidden'), 2000);
                     });
+                }, (error) => {
+                    console.error("P2P Sender Error:", error);
+                    const statusMsg = document.querySelector('.status-msg');
+                    if (statusMsg) statusMsg.innerText = "❌ Connection Failed";
+                    this.showToast("Connection lost: " + error.message, "error");
                 });
 
                 const safeFilename = encodeURIComponent(this.currentFile.name);
