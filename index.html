@@ -87,6 +87,26 @@
                         <input type="password" id="sender-password" placeholder="Enter protection password">
                     </div>
 
+                    <!-- Infinity Beam (Promoted to Main) -->
+                    <div style="margin-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
+                        <label class="toggle-switch" style="margin-bottom: 0.5rem;">
+                            <input type="checkbox" id="beam-toggle">
+                            <span class="slider"></span>
+                            <span class="label-text">📡 Infinity Beam (Unlimited P2P)</span>
+                        </label>
+
+                        <div id="beam-info" class="hidden"
+                            style="background: rgba(0, 242, 255, 0.1); padding: 0.8rem; border-radius: 8px; font-size: 0.85rem; color: #ccffff; margin-bottom: 1rem; text-align: left;">
+                            <p><strong>⚡ Direct Device-to-Device Transfer</strong></p>
+                            <ul style="margin-left: 1.2rem; margin-top: 0.5rem; opacity: 0.9;">
+                                <li>Unlimited file size (No 30KB limit)</li>
+                                <li>Faster for large files (Raw Binary)</li>
+                                <li style="color: #ff9999;">⚠️ <strong>DO NOT close this tab</strong> while sending!
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
                     <!-- Advanced Toggle -->
                     <div class="advanced-toggle" id="advanced-toggle-btn">
                         <span>Advanced Options</span>
@@ -129,14 +149,7 @@
                             </label>
                         </div>
 
-                        <!-- Infinity Beam -->
-                        <div class="setting-row">
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="beam-toggle">
-                                <span class="slider"></span>
-                                <span class="label-text">📡 Infinity Beam (P2P / No Limit)</span>
-                            </label>
-                        </div>
+
 
                         <!-- Audio Modem (Tx Only in Advanced) -->
                         <div class="setting-row">

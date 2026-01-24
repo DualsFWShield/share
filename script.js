@@ -260,6 +260,7 @@ class App {
         });
         this.dom.camoBtn.addEventListener('click', () => Features.toggleCamouflage(true));
         this.dom.camoTrigger.addEventListener('click', () => Features.toggleCamouflage(false));
+        this.dom.beamToggle.addEventListener('change', () => this.checkSizeLimit());
 
         // Audio Events
         this.dom.openAudioBtn.addEventListener('click', () => {
@@ -570,6 +571,13 @@ class App {
         const size = this.currentFile.size;
         const isBeam = this.dom.beamToggle.checked;
         const warning = document.getElementById('size-warning');
+        const beamInfo = document.getElementById('beam-info');
+
+        // Show/Hide Beam Info
+        if (beamInfo) {
+            if (isBeam) beamInfo.classList.remove('hidden');
+            else beamInfo.classList.add('hidden');
+        }
 
         // Limit for URL Hash ~30KB safe
         if (!isBeam && size > 30 * 1024) {
@@ -579,10 +587,12 @@ class App {
             }
             this.dom.generateBtn.disabled = true;
             this.dom.generateBtn.title = "File too large for URL sharing";
+            this.dom.generateBtn.classList.add('disabled-look'); // Optional styling
         } else {
             if (warning) warning.classList.add('hidden');
             this.dom.generateBtn.disabled = false;
             this.dom.generateBtn.title = "";
+            this.dom.generateBtn.classList.remove('disabled-look');
         }
     }
 
