@@ -810,9 +810,40 @@ class App {
 
     toggleQR() {
         if (!this.dom.shareUrl.value) return;
+
         this.dom.qrContainer.classList.toggle('hidden');
-        if (!this.dom.qrContainer.classList.contains('hidden') && this.dom.qrcodeBox.innerHTML === '') {
-            new QRCode(this.dom.qrcodeBox, { text: this.dom.shareUrl.value, width: 200, height: 200 });
+        if (!this.dom.qrContainer.classList.contains('hidden')) {
+            this.dom.qrcodeBox.innerHTML = '';
+
+            try {
+                // Using 'qrcode-generator' API
+                // Type 0 = Auto-detect version (1-40)
+                // 'L' = Low Error Correction (Max Capacity)
+                const qr = qrcode(0, 'L');
+
+                // Set data
+                qr.addData(this.dom.shareUrl.value);
+                qr.make();
+
+                // Create Image tag
+                // Cell size 4 provides a decent resolution (approx 400-500px for V40)
+                const imgTag = qr.createImgTag(4, 10); // cell size 4, margin 10
+                this.dom.qrcodeBox.innerHTML = imgTag;
+
+                // Adjust style of generated IMG
+                const img = this.dom.qrcodeBox.querySelector('img');
+                if (img) {
+                    img.style.width = '100%';
+                    img.style.height = 'auto';
+                    img.style.imageRendering = 'pixelated';
+                }
+
+            } catch (e) {
+                console.error("QR Gen Error:", e);
+                // Usually throws if data exceeds Version 40 capacity
+                this.showToast("Data too massive for QR (Limit ~3KB). Use Infinity Beam.", "error");
+                this.dom.qrContainer.classList.add('hidden');
+            }
         }
     }
 
