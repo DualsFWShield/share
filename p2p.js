@@ -16,7 +16,19 @@ class P2P {
 
         return new Promise((resolve, reject) => {
             // Using default PeerJS cloud server (free tier)
-            this.peer = new Peer();
+            // Configuration ICE (STUN/TURN) pour traverser les routeurs (NAT)
+            // L'ajout de serveurs STUN de Google améliore la connectivité hors local
+            this.peer = new Peer({
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun3.l.google.com:19302' },
+                        { urls: 'stun:stun4.l.google.com:19302' }
+                    ]
+                }
+            });
 
             this.peer.on('open', (id) => {
                 this.peerId = id;
