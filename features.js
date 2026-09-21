@@ -225,45 +225,5 @@ class Features {
         }
     }
 
-    // ---- Camouflage ----
-    static toggleCamouflage(enable) {
-        const app = document.getElementById('app-main');
-        const bg = document.querySelector('.background-orbs');
-        const layer = document.getElementById('camouflage-layer');
 
-        if (enable) {
-            document.body.classList.add('camo-mode');
-            app.classList.add('hidden');
-            bg.classList.add('hidden');
-            layer.classList.remove('hidden');
-            document.title = 'Q4 Financial Overview_2025.xlsx - Excel';
-            this.setupCamoExit();
-        } else {
-            document.body.classList.remove('camo-mode');
-            app.classList.remove('hidden');
-            bg.classList.remove('hidden');
-            layer.classList.add('hidden');
-            document.title = 'AetherShare | Serverless Omnishare';
-        }
-    }
-
-    static setupCamoExit() {
-        if (this._camoInitialized) return;
-        this._camoInitialized = true;
-
-        const trigger = document.getElementById('camo-exit-trigger');
-        if (trigger) trigger.addEventListener('dblclick', () => this.toggleCamouflage(false));
-
-        let escCount = 0;
-        let escTimer = null;
-        document.addEventListener('keydown', (e) => {
-            if (!document.body.classList.contains('camo-mode')) return;
-            if (e.key === 'Escape') {
-                escCount++;
-                if (escTimer) clearTimeout(escTimer);
-                escTimer = setTimeout(() => { escCount = 0; }, 500);
-                if (escCount >= 3) { this.toggleCamouflage(false); escCount = 0; }
-            }
-        });
-    }
 }

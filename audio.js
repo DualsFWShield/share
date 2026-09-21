@@ -139,14 +139,19 @@ class AudioEngine {
             await this.audioCtx.resume();
         }
 
-        this.mediaStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-                echoCancellation: false,
-                noiseSuppression: false,
-                autoGainControl: false,
-                sampleRate: 48000
-            }
-        });
+        try {
+            this.mediaStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false,
+                    sampleRate: 48000
+                }
+            });
+        } catch (err) {
+            console.error('[AudioEngine] Microphone access denied or failed:', err);
+            throw new Error('Microphone access is required to receive audio data. Please allow microphone permissions.');
+        }
 
         const source = this.audioCtx.createMediaStreamSource(this.mediaStream);
 

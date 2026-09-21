@@ -72,48 +72,6 @@ class BluetoothEngine {
         }
     }
 
-    async startListening() {
-        try {
-            if (!navigator.bluetooth) {
-                throw new Error("Web Bluetooth API is not supported in this browser.");
-            }
-
-            this._status('Requesting Bluetooth Device to listen...');
-            this.device = await navigator.bluetooth.requestDevice({
-                filters: [{ services: [this.serviceUuid] }]
-            });
-
-            this._status('Connecting to GATT Server...');
-            this.server = await this.device.gatt.connect();
-
-            this._status('Getting Service...');
-            const service = await this.server.getPrimaryService(this.serviceUuid);
-
-            this._status('Getting Characteristic...');
-            this.characteristic = await service.getCharacteristic(this.characteristicUuid);
-
-            this._status('Starting Notifications...');
-            await this.characteristic.startNotifications();
-
-            let buffer = '';
-            this.characteristic.addEventListener('characteristicvaluechanged', (event) => {
-                const decoder = new TextDecoder();
-                const value = decoder.decode(event.target.value);
-                buffer += value;
-                
-                // Assuming newline delimited or simple streaming for now
-                if (this.onMessage) {
-                    this.onMessage(buffer);
-                    // Reset buffer if needed based on protocol
-                }
-            });
-
-            this._status('Listening for incoming messages...');
-            
-        } catch (error) {
-            this._error(error.message);
-        }
-    }
 
     disconnect() {
         if (this.device && this.device.gatt.connected) {

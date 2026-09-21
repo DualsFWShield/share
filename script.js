@@ -51,7 +51,7 @@ class App {
                 timebomb: document.getElementById('url-timebomb'),
                 vibe: document.getElementById('url-vibe'),
                 geoToggle: document.getElementById('url-geo-toggle'),
-                camoBtn: document.getElementById('url-camo-btn'),
+
                 generateBtn: document.getElementById('url-generate-btn'),
                 result: document.getElementById('url-result'),
                 shareUrl: document.getElementById('url-share-url'),
@@ -181,12 +181,7 @@ class App {
                 recvView: document.getElementById('bluetooth-recv-view'),
                 sendText: document.getElementById('bluetooth-send-text'),
                 sendBtn: document.getElementById('bluetooth-send-btn'),
-                startServerBtn: document.getElementById('bluetooth-start-server-btn'),
-                stopServerBtn: document.getElementById('bluetooth-stop-server-btn'),
-                recvStatus: document.getElementById('bluetooth-recv-status'),
-                recvResult: document.getElementById('bluetooth-recv-result'),
-                recvText: document.getElementById('bluetooth-recv-text'),
-                copyBtn: document.getElementById('bluetooth-copy-btn')
+
             },
 
             // --- Receiver View ---
@@ -282,7 +277,7 @@ class App {
         this.dom.url.generateBtn.addEventListener('click', () => this._generateURLLink());
         this.dom.url.copyBtn.addEventListener('click', () => this._copyToClipboard(this.dom.url.shareUrl.value));
         this.dom.url.qrBtn.addEventListener('click', () => this._toggleURLQR());
-        this.dom.url.camoBtn?.addEventListener('click', () => Features.toggleCamouflage(true));
+
 
         // ---- P2P Mode ----
         this._setupDropZone(this.dom.p2p.dropZone, this.dom.p2p.fileInput, null, (files) => this._onFilesSelectedP2P(files));
@@ -376,43 +371,6 @@ class App {
             
             this.dom.bluetooth.sendBtn.disabled = false;
             this.dom.bluetooth.sendBtn.textContent = 'Scan & Connect to Peer';
-        });
-
-        this.dom.bluetooth.startServerBtn.addEventListener('click', async () => {
-            this.dom.bluetooth.startServerBtn.classList.add('hidden');
-            this.dom.bluetooth.stopServerBtn.classList.remove('hidden');
-            this.dom.bluetooth.recvResult.classList.add('hidden');
-            
-            window.bluetoothEngine.onStatus = (msg) => {
-                this.dom.bluetooth.recvStatus.textContent = msg;
-            };
-            window.bluetoothEngine.onError = (err) => {
-                this._showToast(err, 'error');
-                this.dom.bluetooth.startServerBtn.classList.remove('hidden');
-                this.dom.bluetooth.stopServerBtn.classList.add('hidden');
-            };
-            window.bluetoothEngine.onMessage = (msg) => {
-                this.dom.bluetooth.recvResult.classList.remove('hidden');
-                this.dom.bluetooth.recvText.value = msg;
-                this._showToast('Received data via Bluetooth!', 'success');
-                // Check if it's a P2P ID or URL
-                if (msg.startsWith('http') || msg.includes('|')) {
-                    this._showToast('Data looks like a URL/Hash. Try copying it.', 'info');
-                }
-            };
-            
-            await window.bluetoothEngine.startListening();
-        });
-
-        this.dom.bluetooth.stopServerBtn.addEventListener('click', () => {
-            window.bluetoothEngine.disconnect();
-            this.dom.bluetooth.recvStatus.textContent = 'Server stopped.';
-            this.dom.bluetooth.startServerBtn.classList.remove('hidden');
-            this.dom.bluetooth.stopServerBtn.classList.add('hidden');
-        });
-
-        this.dom.bluetooth.copyBtn.addEventListener('click', () => {
-            this._copyToClipboard(this.dom.bluetooth.recvText.value);
         });
 
         // ---- Receiver View ----
@@ -514,9 +472,8 @@ class App {
             this._showSender();
             this._switchTab('tab-p2p');
             const peerId = hash.split('|')[1];
-            this._showToast(`Receiver detected: ${peerId.substring(0, 8)}...`, 'info');
-            // Auto-set in P2P send mode — user picks file then sends
-            this._pendingReceiverPeerId = peerId;
+            this.dom.p2p.remotePeerInput.value = peerId;
+            this._connectP2PToPeer(peerId);
             return;
         }
 
@@ -861,37 +818,44 @@ class App {
 
     _setupP2PEngineListeners() {
         window.p2pEngine.on('connected', (peerId) => {
-            this._updateP2PConnectionUI(true, peerId);
+            this._updateP2PConnectionUI();
             this._showToast(`Connected to peer: ${peerId.substring(0, 8)}...`, 'success');
         });
 
-        window.p2pEngine.on('disconnected', () => {
-            this._updateP2PConnectionUI(false);
-            this._showToast('Peer disconnected', 'info');
+        window.p2pEngine.on('disconnected', (peerId) => {
+            this._updateP2PConnectionUI();
+            this._showToast(`Peer disconnected: ${peerId.substring(0, 8)}...`, 'info');
         });
 
-        window.p2pEngine.on('meta', (meta) => {
-            this._onP2PMetaReceived(meta);
+        window.p2pEngine.on('meta', (peerId, meta) => {
+            this._onP2PMetaReceived(peerId, meta);
         });
 
-        window.p2pEngine.on('progress', (percent, received, total, speed) => {
-            this._onP2PProgressReceived(percent, received, total, speed);
+        window.p2pEngine.on('progress', (peerId, percent, received, total, speed) => {
+            this._onP2PProgressReceived(peerId, percent, received, total, speed);
         });
 
-        window.p2pEngine.on('complete', (blob, meta) => {
-            this._onP2PFileReceived(blob, meta);
+        window.p2pEngine.on('complete', (peerId, blob, meta) => {
+            this._onP2PFileReceived(peerId, blob, meta);
         });
 
-        window.p2pEngine.on('error', (err) => {
-            this._showToast('P2P: ' + (err.message || err), 'error');
+        window.p2pEngine.on('error', (err, peerId) => {
+            const idStr = peerId ? ` [${peerId.substring(0, 8)}]` : '';
+            this._showToast(`P2P${idStr}: ` + (err.message || err), 'error');
         });
     }
 
-    _updateP2PConnectionUI(isConnected, peerId = null) {
+    _updateP2PConnectionUI() {
+        const isConnected = window.p2pEngine.isConnected();
         if (isConnected) {
+            const peers = window.p2pEngine.getConnectedPeers();
             this.dom.p2p.sessionBanner?.classList.remove('hidden');
             if (this.dom.p2p.connectedPeerName) {
-                this.dom.p2p.connectedPeerName.textContent = peerId ? `${peerId.substring(0, 8)}...` : 'Active';
+                if (peers.length === 1) {
+                    this.dom.p2p.connectedPeerName.textContent = `${peers[0].substring(0, 8)}...`;
+                } else {
+                    this.dom.p2p.connectedPeerName.textContent = `${peers.length} Peers (Room)`;
+                }
             }
             this.dom.p2p.connectView?.classList.add('hidden');
             this.dom.p2p.dashboardView?.classList.remove('hidden');
@@ -1078,21 +1042,21 @@ class App {
         }
     }
 
-    _onP2PMetaReceived(meta) {
+    _onP2PMetaReceived(peerId, meta) {
         this.dom.p2p.recvTransfer.classList.remove('hidden');
         const countLabel = meta.totalFiles > 1 ? `[${meta.fileIndex}/${meta.totalFiles}] ` : '';
-        this.dom.p2p.recvProgressText.textContent = `Receiving ${countLabel}${meta.filename}...`;
+        this.dom.p2p.recvProgressText.textContent = `[${peerId.substring(0,6)}] Receiving ${countLabel}${meta.filename}...`;
         this.dom.p2p.recvProgressFill.style.width = '0%';
     }
 
-    _onP2PProgressReceived(percent, received, total, speed) {
+    _onP2PProgressReceived(peerId, percent, received, total, speed) {
         this.dom.p2p.recvProgressFill.style.width = `${percent}%`;
-        this.dom.p2p.recvProgressText.textContent = `${percent}% — ${this._formatSize(received)} / ${this._formatSize(total)}`;
+        this.dom.p2p.recvProgressText.textContent = `[${peerId.substring(0,6)}] ${percent}% — ${this._formatSize(received)} / ${this._formatSize(total)}`;
         this.dom.p2p.recvSpeed.textContent = `${speed} MB/s`;
         this.dom.p2p.recvPercent.textContent = `${percent}%`;
     }
 
-    async _onP2PFileReceived(blob, meta) {
+    async _onP2PFileReceived(peerId, blob, meta) {
         this.dom.p2p.recvTransfer.classList.add('hidden');
 
         const autoDownload = this.dom.p2p.autoDownload ? this.dom.p2p.autoDownload.checked : true;

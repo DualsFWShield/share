@@ -1,19 +1,21 @@
 /**
  * AetherShare — P2P Engine (WebRTC via PeerJS)
- * Supports bidirectional persistent data channel, multi-file sequential streaming,
- * backpressure control, and instant reconnect / scan pairing.
+ * Multi-Peer Mesh Edition
+ * Supports bidirectional persistent data channels, multi-file sequential streaming,
+ * broadcast sending, backpressure control, and instant reconnect.
+ * 
+ * Standalone Engine: Independent of DOM, suitable for external library use.
  */
 
 class P2PEngine {
     constructor() {
         this.peer = null;
-        this.conn = null;
         this.peerId = null;
-        this.remotePeerId = null;
         this._initPromise = null;
 
-        // Current incoming file state (reset after each file transfer)
-        this.incomingFile = null;
+        // Multi-peer maps
+        this.connections = new Map(); // peerId -> DataConnection
+        this.incomingFiles = new Map(); // peerId -> incomingFile state
 
         // Active connection event listeners
         this.eventListeners = {
@@ -38,9 +40,6 @@ class P2PEngine {
         return this;
     }
 
-    /**
-     * Unsubscribe from engine events
-     */
     off(event, callback) {
         if (this.eventListeners[event]) {
             this.eventListeners[event] = this.eventListeners[event].filter(cb => cb !== callback);
@@ -84,7 +83,9 @@ class P2PEngine {
                 }
             };
 
-            this.peer = new Peer(config);
+            // Assuming PeerJS is loaded globally if used in browser
+            const PeerClass = typeof window !== 'undefined' ? window.Peer : Peer;
+            this.peer = new PeerClass(config);
 
             this.peer.on('open', (id) => {
                 this.peerId = id;
@@ -117,26 +118,25 @@ class P2PEngine {
     }
 
     /**
-     * Check if a peer connection is currently active.
+     * Check if AT LEAST one peer connection is currently active.
      * @returns {boolean}
      */
     isConnected() {
-        return Boolean(this.conn && this.conn.open);
+        return this.connections.size > 0;
     }
 
     /**
-     * Generate a receiver-first URL hash.
-     * @returns {string} URL hash fragment like P2P_RECV|{peerId}
+     * Get a list of currently connected Peer IDs.
+     * @returns {Array<string>}
      */
+    getConnectedPeers() {
+        return Array.from(this.connections.keys());
+    }
+
     getReceiverHash() {
         return `P2P_RECV|${this.peerId}`;
     }
 
-    /**
-     * Generate a sender-first URL hash.
-     * @param {File} [file] - Optional file reference.
-     * @returns {string} URL hash fragment.
-     */
     getSenderHash(file) {
         if (file) {
             const safeName = encodeURIComponent(file.name);
@@ -153,14 +153,9 @@ class P2PEngine {
     async connectTo(remotePeerId) {
         await this.init();
 
-        if (this.isConnected() && this.remotePeerId === remotePeerId) {
+        if (this.connections.has(remotePeerId)) {
             console.log('[P2P] Already connected to:', remotePeerId);
             return;
-        }
-
-        // Close any existing active connection
-        if (this.conn) {
-            try { this.conn.close(); } catch (e) { /* ignore */ }
         }
 
         return new Promise((resolve, reject) => {
@@ -190,10 +185,6 @@ class P2PEngine {
         });
     }
 
-    /**
-     * Listen for incoming connection (Receiver mode).
-     * @param {Object} [callbacks]
-     */
     waitForSender(callbacks = {}) {
         if (callbacks.onConnected) this.on('connected', callbacks.onConnected);
         if (callbacks.onMeta) this.on('meta', callbacks.onMeta);
@@ -202,78 +193,71 @@ class P2PEngine {
         if (callbacks.onError) this.on('error', callbacks.onError);
     }
 
-    /**
-     * Listen for receiver to connect (Sender mode).
-     * @param {Object} [callbacks]
-     */
     waitForReceiver(callbacks = {}) {
         if (callbacks.onReceiverConnected) this.on('connected', callbacks.onReceiverConnected);
         if (callbacks.onError) this.on('error', callbacks.onError);
     }
 
-    /**
-     * Connect and receive in one shot (for #BEAM| URL links).
-     */
     async connectAndReceive(remotePeerId, callbacks = {}) {
         if (callbacks.onMeta) this.on('meta', callbacks.onMeta);
         if (callbacks.onProgress) this.on('progress', callbacks.onProgress);
         if (callbacks.onComplete) this.on('complete', callbacks.onComplete);
         if (callbacks.onError) this.on('error', callbacks.onError);
-
         await this.connectTo(remotePeerId);
     }
 
     /**
      * Internal: Attach data listeners to an open DataConnection.
-     * Keeps connection open for unlimited sequential file transfers.
      * @private
      */
     _setupConnection(conn, isOutbound) {
-        this.conn = conn;
-        this.remotePeerId = conn.peer;
+        const peerId = conn.peer;
+        
+        // Remove existing connection if any
+        if (this.connections.has(peerId)) {
+            try { this.connections.get(peerId).close(); } catch(e){}
+        }
 
-        // Reset incoming buffer for new connection
-        this.incomingFile = null;
+        this.connections.set(peerId, conn);
+        this.incomingFiles.delete(peerId);
 
         conn.on('data', (data) => {
-            this._handleIncomingData(data);
+            this._handleIncomingData(data, peerId);
         });
 
         conn.on('close', () => {
-            console.log('[P2P] Connection closed with:', conn.peer);
-            const wasConnected = this.isConnected();
-            this.conn = null;
-            this.remotePeerId = null;
-            this.incomingFile = null;
-            this._emit('disconnected', conn.peer);
+            console.log('[P2P] Connection closed with:', peerId);
+            this.connections.delete(peerId);
+            this.incomingFiles.delete(peerId);
+            this._emit('disconnected', peerId);
         });
 
         conn.on('error', (err) => {
-            console.error('[P2P] DataChannel error:', err);
-            this._emit('error', err);
+            console.error(`[P2P] DataChannel error with ${peerId}:`, err);
+            this._emit('error', err, peerId);
         });
 
-        this._emit('connected', conn.peer, isOutbound);
+        this._emit('connected', peerId, isOutbound);
     }
 
     /**
-     * Internal: Process chunked stream data on the open channel.
+     * Internal: Process chunked stream data for a specific peer.
      * @private
      */
-    _handleIncomingData(data) {
+    _handleIncomingData(data, peerId) {
         try {
             if (data.type === 'meta') {
-                console.log('[P2P] Incoming file metadata:', data.filename, data.size);
-                this.incomingFile = {
+                console.log(`[P2P] Incoming file metadata from ${peerId}:`, data.filename, data.size);
+                this.incomingFiles.set(peerId, {
                     meta: data,
                     chunks: [],
                     receivedSize: 0,
                     totalSize: data.size,
                     startTime: Date.now(),
                     initialized: true
-                };
+                });
 
-                this._emit('meta', {
+                this._emit('meta', peerId, {
                     filename: data.filename,
                     size: data.size,
                     fileType: data.fileType,
@@ -284,77 +268,91 @@ class P2PEngine {
                     totalFiles: data.totalFiles
                 });
             } else if (data.type === 'chunk') {
-                if (!this.incomingFile || !this.incomingFile.initialized) {
-                    console.warn('[P2P] Received chunk before metadata');
+                const incomingFile = this.incomingFiles.get(peerId);
+                
+                if (!incomingFile || !incomingFile.initialized) {
+                    console.warn(`[P2P] Received chunk before metadata from ${peerId}`);
                     return;
                 }
 
                 const chunkData = data.data;
-                this.incomingFile.chunks.push(chunkData);
+                incomingFile.chunks.push(chunkData);
 
                 const chunkSize = chunkData.byteLength || chunkData.size || 0;
-                this.incomingFile.receivedSize += chunkSize;
+                incomingFile.receivedSize += chunkSize;
 
-                const elapsed = (Date.now() - this.incomingFile.startTime) / 1000;
+                const elapsed = (Date.now() - incomingFile.startTime) / 1000;
                 const percent = Math.min(100, Math.round(
-                    (this.incomingFile.receivedSize / this.incomingFile.totalSize) * 100
+                    (incomingFile.receivedSize / incomingFile.totalSize) * 100
                 ));
                 const speedMBps = elapsed > 0
-                    ? ((this.incomingFile.receivedSize / (1024 * 1024)) / elapsed).toFixed(2)
+                    ? ((incomingFile.receivedSize / (1024 * 1024)) / elapsed).toFixed(2)
                     : '—';
 
-                this._emit('progress', percent, this.incomingFile.receivedSize, this.incomingFile.totalSize, speedMBps);
+                this._emit('progress', peerId, percent, incomingFile.receivedSize, incomingFile.totalSize, speedMBps);
 
                 // Check file completion
-                if (this.incomingFile.receivedSize >= this.incomingFile.totalSize) {
-                    console.log('[P2P] File receive complete:', this.incomingFile.meta.filename);
+                if (incomingFile.receivedSize >= incomingFile.totalSize) {
+                    console.log(`[P2P] File receive complete from ${peerId}:`, incomingFile.meta.filename);
 
-                    const finalBlob = new Blob(this.incomingFile.chunks, {
-                        type: this.incomingFile.meta.fileType || 'application/octet-stream'
+                    const finalBlob = new Blob(incomingFile.chunks, {
+                        type: incomingFile.meta.fileType || 'application/octet-stream'
                     });
-                    const meta = this.incomingFile.meta;
+                    const meta = incomingFile.meta;
 
-                    // Reset incoming buffer so the channel stays open and ready for the next file!
-                    this.incomingFile = null;
+                    // Reset buffer for this peer for the next file
+                    this.incomingFiles.delete(peerId);
 
-                    this._emit('complete', finalBlob, meta);
+                    this._emit('complete', peerId, finalBlob, meta);
                 }
             }
         } catch (err) {
-            console.error('[P2P] Data processing error:', err);
-            this._emit('error', err);
+            console.error(`[P2P] Data processing error for ${peerId}:`, err);
+            this._emit('error', err, peerId);
         }
     }
 
     /**
-     * Send a single file over the established connection.
-     * @param {File|Blob} file - File or Blob to send.
-     * @param {Object} [meta] - Extra metadata (filename, encrypted, salt, iv, fileIndex, totalFiles).
-     * @param {Function} [onProgress] - Callback (percent, sentBytes, totalBytes, speedMBps).
-     * @returns {Promise<void>}
+     * Send a single file over established connections.
+     * @param {File|Blob} file 
+     * @param {Object} [meta] 
+     * @param {Function} [onProgress] 
+     * @param {Array<string>} [targetPeerIds] - Array of specific peer IDs to send to. If empty/null, broadcasts to all.
      */
-    async sendFile(file, meta = {}, onProgress) {
-        if (!this.isConnected()) throw new Error('No active peer connection');
+    async sendFile(file, meta = {}, onProgress, targetPeerIds = null) {
+        if (!this.isConnected()) throw new Error('No active peer connections');
 
-        const CHUNK_SIZE = 16 * 1024; // 16KB per chunk
+        let targets = [];
+        if (targetPeerIds && targetPeerIds.length > 0) {
+            targets = targetPeerIds.map(id => this.connections.get(id)).filter(Boolean);
+        } else {
+            targets = Array.from(this.connections.values());
+        }
+
+        if (targets.length === 0) throw new Error('No valid target peers found');
+
+        const CHUNK_SIZE = 16 * 1024; // 16KB
         const filename = meta.filename || file.name || 'file.bin';
         const totalSize = file.size;
         const totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
         const startTime = Date.now();
 
-        console.log(`[P2P] Sending: ${filename} (${totalSize} bytes, ${totalChunks} chunks)`);
+        console.log(`[P2P] Broadcasting: ${filename} (${totalSize} bytes) to ${targets.length} peer(s)`);
 
-        // 1. Send metadata header
-        this.conn.send({
+        // 1. Send metadata header to all targets
+        const header = {
             type: 'meta',
             filename,
             size: totalSize,
             fileType: file.type || 'application/octet-stream',
             totalChunks,
             ...meta
-        });
+        };
+        for (const conn of targets) {
+            conn.send(header);
+        }
 
-        // 2. Stream chunks with backpressure
+        // 2. Stream chunks with multi-peer backpressure
         const arrayBuffer = await file.arrayBuffer();
         let offset = 0;
         let chunkIndex = 0;
@@ -363,11 +361,15 @@ class P2PEngine {
             const end = Math.min(offset + CHUNK_SIZE, totalSize);
             const chunk = arrayBuffer.slice(offset, end);
 
-            this.conn.send({
+            const chunkPayload = {
                 type: 'chunk',
                 index: chunkIndex,
                 data: chunk
-            });
+            };
+
+            for (const conn of targets) {
+                conn.send(chunkPayload);
+            }
 
             offset = end;
             chunkIndex++;
@@ -378,40 +380,35 @@ class P2PEngine {
 
             onProgress?.(percent, offset, totalSize, speedMBps);
 
-            // Backpressure: yield every 25 chunks or if buffer is high
+            // Backpressure: yield every 25 chunks, wait for ALL targets to drain buffer
             if (chunkIndex % 25 === 0) {
-                const dc = this.conn?.dataChannel;
-                if (dc && dc.bufferedAmount > 1024 * 1024) {
-                    await new Promise(resolve => {
-                        const check = () => {
-                            if (!dc || dc.bufferedAmount < 256 * 1024) {
-                                resolve();
-                            } else {
-                                setTimeout(check, 20);
-                            }
-                        };
-                        check();
-                    });
-                } else {
-                    await new Promise(r => setTimeout(r, 4));
-                }
+                await Promise.all(targets.map(async (conn) => {
+                    const dc = conn.dataChannel;
+                    if (dc && dc.bufferedAmount > 1024 * 1024) {
+                        return new Promise(resolve => {
+                            const check = () => {
+                                if (!dc || dc.bufferedAmount < 256 * 1024) {
+                                    resolve();
+                                } else {
+                                    setTimeout(check, 20);
+                                }
+                            };
+                            check();
+                        });
+                    }
+                }));
+                await new Promise(r => setTimeout(r, 4));
             }
         }
 
-        console.log(`[P2P] Sent file successfully: ${filename}`);
+        console.log(`[P2P] Sent file successfully to ${targets.length} peer(s): ${filename}`);
     }
 
     /**
-     * Send multiple files sequentially across the active channel.
-     * Keeps connection open after all files are sent.
-     * @param {Array<File>} files
-     * @param {Function} [metaProvider] - async (file, index, count) => meta
-     * @param {Function} [onFileStart] - (file, index, count)
-     * @param {Function} [onProgress] - (percent, sent, total, speed, fileIndex, totalFiles)
-     * @param {Function} [onFileComplete] - (file, index, count)
+     * Send multiple files sequentially.
      */
-    async sendFiles(files, metaProvider, onFileStart, onProgress, onFileComplete) {
-        if (!this.isConnected()) throw new Error('No active peer connection');
+    async sendFiles(files, metaProvider, onFileStart, onProgress, onFileComplete, targetPeerIds = null) {
+        if (!this.isConnected()) throw new Error('No active peer connections');
 
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
@@ -424,7 +421,7 @@ class P2PEngine {
 
             await this.sendFile(file, meta, (percent, sent, total, speed) => {
                 onProgress?.(percent, sent, total, speed, i + 1, files.length);
-            });
+            }, targetPeerIds);
 
             onFileComplete?.(file, i + 1, files.length);
 
@@ -436,19 +433,24 @@ class P2PEngine {
     }
 
     /**
-     * Disconnect current active peer connection without destroying the peer instance.
-     * The engine remains ready to accept new connections or reconnect.
+     * Disconnect a specific peer, or ALL peers if no ID provided.
      */
-    disconnect() {
-        if (this.conn) {
-            try { this.conn.close(); } catch (e) { /* ignore */ }
-            this.conn = null;
-        }
-        const prevRemote = this.remotePeerId;
-        this.remotePeerId = null;
-        this.incomingFile = null;
-        if (prevRemote) {
-            this._emit('disconnected', prevRemote);
+    disconnect(peerId = null) {
+        if (peerId) {
+            const conn = this.connections.get(peerId);
+            if (conn) {
+                try { conn.close(); } catch(e){}
+                this.connections.delete(peerId);
+                this.incomingFiles.delete(peerId);
+                this._emit('disconnected', peerId);
+            }
+        } else {
+            for (const [id, conn] of this.connections.entries()) {
+                try { conn.close(); } catch(e){}
+                this.incomingFiles.delete(id);
+                this._emit('disconnected', id);
+            }
+            this.connections.clear();
         }
     }
 
@@ -474,4 +476,12 @@ class P2PEngine {
     }
 }
 
-window.p2pEngine = new P2PEngine();
+// UMD / ES6 / Browser Export
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = P2PEngine;
+}
+if (typeof window !== 'undefined') {
+    window.P2PEngine = P2PEngine;
+    // Auto-instantiate for AetherShare legacy compatibility
+    window.p2pEngine = new P2PEngine();
+}
