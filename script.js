@@ -857,11 +857,9 @@ class App {
                     this.dom.p2p.connectedPeerName.textContent = `${peers.length} Peers (Room)`;
                 }
             }
-            this.dom.p2p.connectView?.classList.add('hidden');
             this.dom.p2p.dashboardView?.classList.remove('hidden');
         } else {
             this.dom.p2p.sessionBanner?.classList.add('hidden');
-            this.dom.p2p.connectView?.classList.remove('hidden');
             this.dom.p2p.dashboardView?.classList.add('hidden');
             if (this.dom.p2p.recvStatus) {
                 this.dom.p2p.recvStatus.textContent = 'Waiting for connection...';

@@ -96,7 +96,13 @@ class P2PEngine {
 
             this.peer.on('connection', (conn) => {
                 console.log('[P2P] Incoming connection from:', conn.peer);
-                this._setupConnection(conn, false);
+                if (conn.open) {
+                    this._setupConnection(conn, false);
+                } else {
+                    conn.on('open', () => {
+                        this._setupConnection(conn, false);
+                    });
+                }
             });
 
             this.peer.on('error', (err) => {
@@ -152,6 +158,10 @@ class P2PEngine {
      */
     async connectTo(remotePeerId) {
         await this.init();
+
+        if (remotePeerId === this.peerId) {
+            throw new Error('Cannot connect to yourself.');
+        }
 
         if (this.connections.has(remotePeerId)) {
             console.log('[P2P] Already connected to:', remotePeerId);
@@ -324,9 +334,9 @@ class P2PEngine {
 
         let targets = [];
         if (targetPeerIds && targetPeerIds.length > 0) {
-            targets = targetPeerIds.map(id => this.connections.get(id)).filter(Boolean);
+            targets = targetPeerIds.map(id => this.connections.get(id)).filter(c => c && c.open);
         } else {
-            targets = Array.from(this.connections.values());
+            targets = Array.from(this.connections.values()).filter(c => c && c.open);
         }
 
         if (targets.length === 0) throw new Error('No valid target peers found');
