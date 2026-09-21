@@ -1,154 +1,242 @@
 /**
- * AetherShare - Audio Modem v2
- * Uses AudioContext for FSK Modulation/Demodulation + Visualization.
+ * AetherShare — Audio Engine (ggwave)
+ * Data-over-sound using ggwave WebAssembly.
+ * Supports audible and ultrasound protocols.
  */
 
-class AudioKey {
+class AudioEngine {
     constructor() {
-        this.ctx = null;
-        this.osc = null;
-
-        // Frequencies (Hz)
-        this.markFreq = 2000; // '1'
-        this.spaceFreq = 1200; // '0'
-        this.baudRate = 20; // Bits per sec (Increased from 10)
-
-        // Receiver State
+        this.ggwave = null;
+        this.instance = null;
+        this.audioCtx = null;
         this.isListening = false;
+        this.mediaStream = null;
+        this.scriptNode = null;
         this.analyser = null;
-        this.microphone = null;
-        this.onSpectrum = null;      // Callback for viz
-        this.onBit = null;           // Callback for received bit
 
-        // Decoding
-        this.rxBuffer = []; // Rolling buffer of levels
+        // Callbacks
+        this.onReceived = null;
+        this.onSpectrum = null;
+
+        // Protocol mapping
+        this.protocols = {
+            audible_fast: null,
+            audible_normal: null,
+            ultrasound_fast: null,
+            ultrasound_normal: null
+        };
+
+        this._initPromise = null;
     }
 
-    init() {
-        if (!this.ctx) {
-            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    /**
+     * Initialize ggwave WASM module.
+     * Returns a promise that resolves when ready.
+     */
+    async init() {
+        if (this._initPromise) return this._initPromise;
+
+        this._initPromise = new Promise(async (resolve, reject) => {
+            try {
+                if (typeof ggwave_factory !== 'function') {
+                    throw new Error('ggwave library not loaded. Check CDN.');
+                }
+
+                this.ggwave = await ggwave_factory();
+
+                // Map protocol IDs
+                this.protocols = {
+                    audible_fast: this.ggwave.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST,
+                    audible_normal: this.ggwave.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_NORMAL,
+                    ultrasound_fast: this.ggwave.ProtocolId.GGWAVE_PROTOCOL_ULTRASOUND_FAST,
+                    ultrasound_normal: this.ggwave.ProtocolId.GGWAVE_PROTOCOL_ULTRASOUND_NORMAL
+                };
+
+                // Create instance with default parameters
+                const params = this.ggwave.getDefaultParameters();
+                params.sampleRateInp = 48000;
+                params.sampleRateOut = 48000;
+                this.instance = this.ggwave.init(params);
+
+                console.log('[AudioEngine] ggwave initialized successfully');
+                resolve();
+            } catch (err) {
+                console.error('[AudioEngine] Init failed:', err);
+                this._initPromise = null;
+                reject(err);
+            }
+        });
+
+        return this._initPromise;
+    }
+
+    /**
+     * Encode text into audio waveform and play it.
+     * @param {string} text - The text to transmit.
+     * @param {string} protocolKey - Protocol key (audible_fast, ultrasound_fast, etc.)
+     * @param {number} volume - Volume 0-20. Default 10.
+     * @returns {Promise<void>}
+     */
+    async transmit(text, protocolKey = 'ultrasound_fast', volume = 10) {
+        await this.init();
+
+        const protocol = this.protocols[protocolKey];
+        if (protocol === undefined || protocol === null) {
+            throw new Error(`Unknown protocol: ${protocolKey}`);
         }
-    }
 
-    // --- TRANSMITTER ---
-    async transmit(text) {
-        this.init();
-        // Browser requires user interaction to resume audio context
-        if (this.ctx.state === 'suspended') {
-            await this.ctx.resume();
+        // Encode to PCM waveform
+        const waveform = this.ggwave.encode(this.instance, text, protocol, volume);
+
+        if (!waveform || waveform.length === 0) {
+            throw new Error('ggwave.encode returned empty waveform');
         }
 
-        // Preamble (Sync)
-        // 10101010 sync byte + data + constant tail
-        const binary = "10101010" + this.textToBinary(text) + "0000";
-        console.log("Transmitting...", text, binary);
-
-        const startTime = this.ctx.currentTime + 0.1;
-        const bitDuration = 1 / this.baudRate;
-
-        this.osc = this.ctx.createOscillator();
-        this.osc.type = 'sine'; // Sine wave is smoothest
-
-        // Add Gain Node to control volume (avoid clipping but ensure audibility)
-        const gainNode = this.ctx.createGain();
-        gainNode.gain.value = 0.5; // 50% volume to prevent distortion
-
-        this.osc.connect(gainNode);
-        gainNode.connect(this.ctx.destination);
-
-        // Schedule Frequencies
-        this.osc.frequency.setValueAtTime(this.spaceFreq, startTime);
-
-        for (let i = 0; i < binary.length; i++) {
-            const bit = binary[i];
-            const time = startTime + (i * bitDuration);
-            const freq = bit === '1' ? this.markFreq : this.spaceFreq;
-            this.osc.frequency.setValueAtTime(freq, time);
+        // Play via Web Audio API
+        if (!this.audioCtx) {
+            this.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
         }
 
-        const endTime = startTime + (binary.length * bitDuration);
+        if (this.audioCtx.state === 'suspended') {
+            await this.audioCtx.resume();
+        }
 
-        this.osc.start(startTime);
-        this.osc.stop(endTime);
+        const audioBuffer = this.audioCtx.createBuffer(1, waveform.length, 48000);
+        const channelData = audioBuffer.getChannelData(0);
+        channelData.set(waveform);
 
-        return new Promise(r => setTimeout(r, (endTime - startTime) * 1000 + 500));
+        const source = this.audioCtx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(this.audioCtx.destination);
+
+        return new Promise((resolve) => {
+            source.onended = () => {
+                console.log('[AudioEngine] Transmission complete');
+                resolve();
+            };
+            source.start();
+        });
     }
 
-    textToBinary(text) {
-        return text.split('').map(char => {
-            return char.charCodeAt(0).toString(2).padStart(8, '0');
-        }).join('');
-    }
+    /**
+     * Start listening for audio data via microphone.
+     * @param {Function} onReceived - Callback with decoded string.
+     * @param {Function} onSpectrum - Callback with Uint8Array spectrum data for visualization.
+     */
+    async startListening(onReceived, onSpectrum) {
+        await this.init();
 
-    // --- RECEIVER ---
-    async startListening(onSpectrum, onBitDecoded) {
-        this.init();
         if (this.isListening) return;
 
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            this.microphone = this.ctx.createMediaStreamSource(stream);
-            this.analyser = this.ctx.createAnalyser();
-            this.analyser.fftSize = 2048; // Resolution
-            this.analyser.smoothingTimeConstant = 0.5;
-            this.microphone.connect(this.analyser);
+        this.onReceived = onReceived;
+        this.onSpectrum = onSpectrum;
 
-            this.isListening = true;
-            this.onSpectrum = onSpectrum;
-            this.onBit = onBitDecoded;
-
-            this.processLoop();
-
-        } catch (e) {
-            console.error(e);
-            throw e;
+        if (!this.audioCtx) {
+            this.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
         }
+
+        if (this.audioCtx.state === 'suspended') {
+            await this.audioCtx.resume();
+        }
+
+        this.mediaStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+                sampleRate: 48000
+            }
+        });
+
+        const source = this.audioCtx.createMediaStreamSource(this.mediaStream);
+
+        // Analyser for visualization
+        this.analyser = this.audioCtx.createAnalyser();
+        this.analyser.fftSize = 2048;
+        this.analyser.smoothingTimeConstant = 0.6;
+        source.connect(this.analyser);
+
+        // ScriptProcessorNode for ggwave decode
+        const bufferSize = 1024;
+        this.scriptNode = this.audioCtx.createScriptProcessor(bufferSize, 1, 1);
+
+        this.scriptNode.onaudioprocess = (event) => {
+            if (!this.isListening) return;
+
+            const inputData = event.inputBuffer.getChannelData(0);
+            const result = this.ggwave.decode(this.instance, inputData);
+
+            if (result && result.length > 0) {
+                const decoded = new TextDecoder().decode(new Uint8Array(result));
+                console.log('[AudioEngine] Decoded:', decoded);
+                if (this.onReceived) this.onReceived(decoded);
+            }
+        };
+
+        source.connect(this.scriptNode);
+        this.scriptNode.connect(this.audioCtx.destination);
+
+        this.isListening = true;
+
+        // Start spectrum visualization loop
+        this._visualizeLoop();
+
+        console.log('[AudioEngine] Listening started');
     }
 
+    /**
+     * Stop listening.
+     */
     stopListening() {
         this.isListening = false;
-        if (this.microphone) {
-            this.microphone.disconnect();
-            this.microphone = null;
+
+        if (this.scriptNode) {
+            this.scriptNode.disconnect();
+            this.scriptNode = null;
         }
+
+        if (this.mediaStream) {
+            this.mediaStream.getTracks().forEach(t => t.stop());
+            this.mediaStream = null;
+        }
+
+        this.analyser = null;
+        console.log('[AudioEngine] Listening stopped');
     }
 
-    processLoop() {
+    /**
+     * Get spectrum data for visualization.
+     * @returns {Uint8Array|null}
+     */
+    getSpectrumData() {
+        if (!this.analyser) return null;
+        const data = new Uint8Array(this.analyser.frequencyBinCount);
+        this.analyser.getByteFrequencyData(data);
+        return data;
+    }
+
+    /** @private */
+    _visualizeLoop() {
         if (!this.isListening) return;
 
-        // 1. Spectrum Data for Viz
-        const bufferLength = this.analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-        this.analyser.getByteFrequencyData(dataArray);
-
-        if (this.onSpectrum) this.onSpectrum(dataArray);
-
-        // 2. Decode Logic (Simple Energy Detection)
-        // Bin size = 44100 / 2048 ~= 21.5 Hz
-        const hzPerBin = this.ctx.sampleRate / this.analyser.fftSize;
-        const markBin = Math.round(this.markFreq / hzPerBin);
-        const spaceBin = Math.round(this.spaceFreq / hzPerBin);
-
-        // Scan a small range around target bins to be forgiving
-        const range = 2;
-        let markEnergy = 0;
-        let spaceEnergy = 0;
-
-        for (let i = -range; i <= range; i++) {
-            markEnergy = Math.max(markEnergy, dataArray[markBin + i]);
-            spaceEnergy = Math.max(spaceEnergy, dataArray[spaceBin + i]);
+        const data = this.getSpectrumData();
+        if (data && this.onSpectrum) {
+            this.onSpectrum(data);
         }
 
-        const noiseGate = 50;
+        requestAnimationFrame(() => this._visualizeLoop());
+    }
 
-        if (markEnergy > noiseGate || spaceEnergy > noiseGate) {
-            // Very simple majority vote
-            const bit = markEnergy > spaceEnergy ? 1 : 0;
-            if (this.onBit) this.onBit(bit, Math.max(markEnergy, spaceEnergy));
+    /**
+     * Cleanup resources.
+     */
+    destroy() {
+        this.stopListening();
+        if (this.audioCtx) {
+            this.audioCtx.close();
+            this.audioCtx = null;
         }
-
-        requestAnimationFrame(() => this.processLoop());
     }
 }
 
-window.audioComp = new AudioKey();
+window.audioEngine = new AudioEngine();
