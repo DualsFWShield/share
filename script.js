@@ -68,9 +68,8 @@ class App {
 
             // --- P2P Mode ---
             p2p: {
-                modeSelector: document.getElementById('p2p-mode-selector'),
-                sendView: document.getElementById('p2p-send-view'),
-                recvView: document.getElementById('p2p-recv-view'),
+                connectView: document.getElementById('p2p-connect-view'),
+                dashboardView: document.getElementById('p2p-dashboard-view'),
                 sessionBanner: document.getElementById('p2p-session-banner'),
                 connectedPeerName: document.getElementById('p2p-connected-peer-name'),
                 disconnectBtn: document.getElementById('p2p-disconnect-btn'),
@@ -78,21 +77,14 @@ class App {
                 remotePeerInput: document.getElementById('p2p-remote-peer-input'),
                 scanQrBtn: document.getElementById('p2p-scan-qr-btn'),
                 connectBtn: document.getElementById('p2p-connect-btn'),
-                showSenderQrBtn: document.getElementById('p2p-show-sender-qr-btn'),
                 dropZone: document.getElementById('drop-zone-p2p'),
                 fileInput: document.getElementById('file-input-p2p'),
                 sendOptions: document.getElementById('p2p-send-options'),
-                filename: document.getElementById('p2p-filename'),
-                filesize: document.getElementById('p2p-filesize'),
                 fileChips: document.getElementById('p2p-file-chips'),
                 encryptToggle: document.getElementById('p2p-encrypt-toggle'),
                 passwordGroup: document.getElementById('p2p-password-group'),
                 password: document.getElementById('p2p-password'),
                 startSendBtn: document.getElementById('p2p-start-send-btn'),
-                sendWaiting: document.getElementById('p2p-send-waiting'),
-                sendQrcode: document.getElementById('p2p-send-qrcode'),
-                sendUrl: document.getElementById('p2p-send-url'),
-                sendCopyBtn: document.getElementById('p2p-send-copy-btn'),
                 sendProgress: document.getElementById('p2p-send-progress'),
                 sendProgressFill: document.getElementById('p2p-send-progress-fill'),
                 sendProgressText: document.getElementById('p2p-send-progress-text'),
@@ -106,7 +98,9 @@ class App {
                 recvQr: document.getElementById('p2p-recv-qr'),
                 recvQrcode: document.getElementById('p2p-recv-qrcode'),
                 recvIdDisplay: document.getElementById('p2p-recv-id-display'),
-                recvScanBtn: document.getElementById('p2p-recv-scan-btn'),
+                shareLinkBox: document.getElementById('p2p-share-link-box'),
+                sendUrl: document.getElementById('p2p-send-url'),
+                sendCopyBtn: document.getElementById('p2p-send-copy-btn'),
                 recvTransfer: document.getElementById('p2p-recv-transfer'),
                 recvProgressFill: document.getElementById('p2p-recv-progress-fill'),
                 recvProgressText: document.getElementById('p2p-recv-progress-text'),
@@ -181,6 +175,20 @@ class App {
                 stopScanBtn: document.getElementById('color-stop-scan-btn'),
             },
 
+            // --- Bluetooth Mode ---
+            bluetooth: {
+                sendView: document.getElementById('bluetooth-send-view'),
+                recvView: document.getElementById('bluetooth-recv-view'),
+                sendText: document.getElementById('bluetooth-send-text'),
+                sendBtn: document.getElementById('bluetooth-send-btn'),
+                startServerBtn: document.getElementById('bluetooth-start-server-btn'),
+                stopServerBtn: document.getElementById('bluetooth-stop-server-btn'),
+                recvStatus: document.getElementById('bluetooth-recv-status'),
+                recvResult: document.getElementById('bluetooth-recv-result'),
+                recvText: document.getElementById('bluetooth-recv-text'),
+                copyBtn: document.getElementById('bluetooth-copy-btn')
+            },
+
             // --- Receiver View ---
             recv: {
                 filename: document.getElementById('recv-filename'),
@@ -219,11 +227,7 @@ class App {
             this._switchTab(btn.dataset.tab);
         });
 
-        // ---- Sub-mode selectors (P2P, QRS, Audio, Color) ----
-        this._bindModeSwitcher(this.dom.p2p.modeSelector, 'data-p2p-mode', {
-            send: () => { this.dom.p2p.sendView.classList.remove('hidden'); this.dom.p2p.recvView.classList.add('hidden'); },
-            receive: () => { this.dom.p2p.sendView.classList.add('hidden'); this.dom.p2p.recvView.classList.remove('hidden'); this._initP2PReceiver(); }
-        });
+        // ---- Sub-mode selectors (QRS, Audio, Color) ----
 
         document.querySelectorAll('[data-qrs-mode]').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -299,18 +303,14 @@ class App {
                 }
             });
         });
-        this.dom.p2p.showSenderQrBtn?.addEventListener('click', () => this._showSenderQRWaiting());
         this.dom.p2p.startSendBtn.addEventListener('click', () => this._startP2PSend());
-        this.dom.p2p.sendCopyBtn.addEventListener('click', () => this._copyToClipboard(this.dom.p2p.sendUrl.value));
-        this.dom.p2p.disconnectBtn?.addEventListener('click', () => window.p2pEngine.disconnect());
-        this.dom.p2p.recvScanBtn?.addEventListener('click', () => {
-            this._openQRScanner((text) => {
-                const id = this._parsePeerIdFromScanned(text);
-                if (id) {
-                    this._connectP2PToPeer(id);
-                }
-            });
+        this.dom.p2p.sendCopyBtn?.addEventListener('click', () => this._copyToClipboard(this.dom.p2p.sendUrl.value));
+        this.dom.p2p.recvIdDisplay?.addEventListener('click', () => {
+            if (this.dom.p2p.recvIdDisplay.dataset.peerId) {
+                this._copyToClipboard(this.dom.p2p.recvIdDisplay.dataset.peerId);
+            }
         });
+        this.dom.p2p.disconnectBtn?.addEventListener('click', () => window.p2pEngine.disconnect());
 
         // ---- QR Stream Mode ----
         this._setupDropZone(this.dom.qrs.dropZone, this.dom.qrs.fileInput, (file, isZip, count) => this._onFileSelectedQRS(file, isZip, count));
@@ -341,6 +341,80 @@ class App {
         this.dom.color.startScanBtn.addEventListener('click', () => this._colorStartScan());
         this.dom.color.stopScanBtn.addEventListener('click', () => this._colorStopScan());
 
+        // ---- Bluetooth Mode ----
+        document.querySelectorAll('[data-bluetooth-mode]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('[data-bluetooth-mode]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                if (btn.dataset.bluetoothMode === 'send') {
+                    this.dom.bluetooth.sendView.classList.remove('hidden'); this.dom.bluetooth.recvView.classList.add('hidden');
+                } else {
+                    this.dom.bluetooth.sendView.classList.add('hidden'); this.dom.bluetooth.recvView.classList.remove('hidden');
+                }
+            });
+        });
+
+        this.dom.bluetooth.sendText.addEventListener('input', () => {
+            this.dom.bluetooth.sendBtn.disabled = !this.dom.bluetooth.sendText.value.trim();
+        });
+
+        this.dom.bluetooth.sendBtn.addEventListener('click', async () => {
+            const text = this.dom.bluetooth.sendText.value.trim();
+            if (!text) return;
+            
+            this.dom.bluetooth.sendBtn.disabled = true;
+            this.dom.bluetooth.sendBtn.textContent = 'Connecting...';
+            
+            window.bluetoothEngine.onStatus = (msg) => this._showToast(msg, 'info');
+            window.bluetoothEngine.onError = (err) => {
+                this._showToast(err, 'error');
+                this.dom.bluetooth.sendBtn.disabled = false;
+                this.dom.bluetooth.sendBtn.textContent = 'Scan & Connect to Peer';
+            };
+            
+            await window.bluetoothEngine.connectAndSend(text);
+            
+            this.dom.bluetooth.sendBtn.disabled = false;
+            this.dom.bluetooth.sendBtn.textContent = 'Scan & Connect to Peer';
+        });
+
+        this.dom.bluetooth.startServerBtn.addEventListener('click', async () => {
+            this.dom.bluetooth.startServerBtn.classList.add('hidden');
+            this.dom.bluetooth.stopServerBtn.classList.remove('hidden');
+            this.dom.bluetooth.recvResult.classList.add('hidden');
+            
+            window.bluetoothEngine.onStatus = (msg) => {
+                this.dom.bluetooth.recvStatus.textContent = msg;
+            };
+            window.bluetoothEngine.onError = (err) => {
+                this._showToast(err, 'error');
+                this.dom.bluetooth.startServerBtn.classList.remove('hidden');
+                this.dom.bluetooth.stopServerBtn.classList.add('hidden');
+            };
+            window.bluetoothEngine.onMessage = (msg) => {
+                this.dom.bluetooth.recvResult.classList.remove('hidden');
+                this.dom.bluetooth.recvText.value = msg;
+                this._showToast('Received data via Bluetooth!', 'success');
+                // Check if it's a P2P ID or URL
+                if (msg.startsWith('http') || msg.includes('|')) {
+                    this._showToast('Data looks like a URL/Hash. Try copying it.', 'info');
+                }
+            };
+            
+            await window.bluetoothEngine.startListening();
+        });
+
+        this.dom.bluetooth.stopServerBtn.addEventListener('click', () => {
+            window.bluetoothEngine.disconnect();
+            this.dom.bluetooth.recvStatus.textContent = 'Server stopped.';
+            this.dom.bluetooth.startServerBtn.classList.remove('hidden');
+            this.dom.bluetooth.stopServerBtn.classList.add('hidden');
+        });
+
+        this.dom.bluetooth.copyBtn.addEventListener('click', () => {
+            this._copyToClipboard(this.dom.bluetooth.recvText.value);
+        });
+
         // ---- Receiver View ----
         this.dom.recv.downloadBtn.addEventListener('click', () => this._downloadBlob(this.receivedBlob, this.receivedHeader?.filename));
         this.dom.recv.decryptBtn.addEventListener('click', () => this._attemptDecryption());
@@ -368,6 +442,11 @@ class App {
         this.dom.tabPanes.forEach(pane => {
             pane.classList.toggle('active', pane.id === tabId);
         });
+
+        // Auto-initialize P2P room when entering P2P tab if not connected
+        if (tabId === 'tab-p2p' && !window.p2pEngine.isConnected()) {
+            this._initP2PConnectionInfo();
+        }
     }
 
     // ============================================================
@@ -814,15 +893,14 @@ class App {
             if (this.dom.p2p.connectedPeerName) {
                 this.dom.p2p.connectedPeerName.textContent = peerId ? `${peerId.substring(0, 8)}...` : 'Active';
             }
-            this.dom.p2p.connectBox?.classList.add('hidden');
-            this.dom.p2p.sendWaiting?.classList.add('hidden');
-            this.dom.p2p.recvWaitBox?.classList.add('hidden');
+            this.dom.p2p.connectView?.classList.add('hidden');
+            this.dom.p2p.dashboardView?.classList.remove('hidden');
         } else {
             this.dom.p2p.sessionBanner?.classList.add('hidden');
-            this.dom.p2p.connectBox?.classList.remove('hidden');
-            this.dom.p2p.recvWaitBox?.classList.remove('hidden');
+            this.dom.p2p.connectView?.classList.remove('hidden');
+            this.dom.p2p.dashboardView?.classList.add('hidden');
             if (this.dom.p2p.recvStatus) {
-                this.dom.p2p.recvStatus.textContent = 'Waiting for sender...';
+                this.dom.p2p.recvStatus.textContent = 'Waiting for connection...';
             }
         }
     }
@@ -851,56 +929,24 @@ class App {
         }
     }
 
-    async _showSenderQRWaiting() {
-        try {
-            const peerId = await window.p2pEngine.init();
-            const hash = window.p2pEngine.getSenderHash();
-            const fullUrl = `${location.origin}${location.pathname}#${hash}`;
 
-            this.dom.p2p.sendWaiting.classList.remove('hidden');
-            this.dom.p2p.sendUrl.value = fullUrl;
-
-            this.dom.p2p.sendQrcode.innerHTML = '';
-            try {
-                const qr = qrcode(0, 'L');
-                qr.addData(fullUrl);
-                qr.make();
-                this.dom.p2p.sendQrcode.innerHTML = qr.createImgTag(4, 8);
-                const img = this.dom.p2p.sendQrcode.querySelector('img');
-                if (img) { img.style.width = '100%'; img.style.height = 'auto'; img.style.imageRendering = 'pixelated'; }
-            } catch (e) {
-                console.warn('QR render error:', e);
-            }
-        } catch (err) {
-            this._showToast('Failed to initialize sender: ' + err.message, 'error');
-        }
-    }
 
     _onFilesSelectedP2P(files) {
         this.selectedP2PFiles = files;
         if (!files || files.length === 0) return;
 
-        if (files.length === 1) {
-            const file = files[0];
-            this.dom.p2p.filename.textContent = file.name;
-            this.dom.p2p.filesize.textContent = this._formatSize(file.size);
-            this.dom.p2p.fileChips.classList.add('hidden');
-            this.dom.p2p.startSendBtn.textContent = '🚀 Send File';
-        } else {
-            const totalSize = files.reduce((acc, f) => acc + f.size, 0);
-            this.dom.p2p.filename.textContent = `📁 ${files.length} files selected`;
-            this.dom.p2p.filesize.textContent = `Total: ${this._formatSize(totalSize)}`;
+        this.dom.p2p.fileChips.innerHTML = '';
+        let totalSize = 0;
+        files.forEach(f => {
+            totalSize += f.size;
+            const chip = document.createElement('div');
+            chip.className = 'file-chip';
+            chip.innerHTML = `<span class="chip-name">${f.name}</span><span class="chip-size">${this._formatSize(f.size)}</span>`;
+            this.dom.p2p.fileChips.appendChild(chip);
+        });
 
-            this.dom.p2p.fileChips.innerHTML = '';
-            files.forEach(f => {
-                const chip = document.createElement('div');
-                chip.className = 'file-chip';
-                chip.innerHTML = `<span class="chip-name">${f.name}</span><span class="chip-size">${this._formatSize(f.size)}</span>`;
-                this.dom.p2p.fileChips.appendChild(chip);
-            });
-            this.dom.p2p.fileChips.classList.remove('hidden');
-            this.dom.p2p.startSendBtn.textContent = `🚀 Send ${files.length} Files`;
-        }
+        this.dom.p2p.fileChips.classList.remove('hidden');
+        this.dom.p2p.startSendBtn.textContent = files.length === 1 ? '🚀 Send File' : `🚀 Send ${files.length} Files`;
 
         this.dom.p2p.sendOptions.classList.remove('hidden');
     }
@@ -988,11 +1034,12 @@ class App {
         }
     }
 
-    async _initP2PReceiver() {
+    async _initP2PConnectionInfo() {
+        if (!this.dom.p2p.recvStatus) return;
         this.dom.p2p.recvStatus.textContent = 'Initializing Room...';
         this.dom.p2p.recvQr.classList.add('hidden');
         this.dom.p2p.recvIdDisplay.classList.add('hidden');
-        this.dom.p2p.recvTransfer.classList.add('hidden');
+        this.dom.p2p.shareLinkBox.classList.add('hidden');
 
         try {
             const peerId = await window.p2pEngine.init();
@@ -1000,12 +1047,10 @@ class App {
             const fullUrl = `${location.origin}${location.pathname}#${hash}`;
 
             if (window.p2pEngine.isConnected()) {
-                this.dom.p2p.recvStatus.textContent = 'Connected — ready for incoming files!';
-                this.dom.p2p.recvWaitBox.classList.add('hidden');
-                return;
+                return; // Already handled by UI update
             }
 
-            this.dom.p2p.recvStatus.textContent = 'Waiting for sender to connect or scan...';
+            this.dom.p2p.recvStatus.textContent = 'Ready — Waiting for a peer to connect';
 
             this.dom.p2p.recvQr.classList.remove('hidden');
             this.dom.p2p.recvQrcode.innerHTML = '';
@@ -1019,7 +1064,13 @@ class App {
             } catch (e) { /* ignore */ }
 
             this.dom.p2p.recvIdDisplay.classList.remove('hidden');
-            this.dom.p2p.recvIdDisplay.textContent = `Room ID: ${peerId}`;
+            this.dom.p2p.recvIdDisplay.textContent = `Peer ID: ${peerId} (Click to copy)`;
+            this.dom.p2p.recvIdDisplay.dataset.peerId = peerId;
+            this.dom.p2p.recvIdDisplay.style.cursor = 'pointer';
+            this.dom.p2p.recvIdDisplay.title = "Click to copy Peer ID";
+            
+            this.dom.p2p.shareLinkBox.classList.remove('hidden');
+            this.dom.p2p.sendUrl.value = fullUrl;
 
         } catch (err) {
             this._showToast('P2P Init failed: ' + err.message, 'error');
