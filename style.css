@@ -317,6 +317,12 @@ header {
     overflow: hidden;
 }
 
+.btn.small {
+    width: auto;
+    padding: 0.35rem 0.8rem;
+    font-size: 0.75rem;
+}
+
 .btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
@@ -733,15 +739,17 @@ select option {
 }
 
 .stat-card .stat-value {
+    display: block;
     font-size: 1.3rem;
     font-weight: 700;
     color: var(--accent-cyan);
 }
 
 .stat-card .stat-label {
+    display: block;
     font-size: 0.72rem;
     color: var(--text-muted);
-    margin-top: 0.15rem;
+    margin-top: 0.25rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -798,6 +806,12 @@ select option {
     align-items: center;
     gap: 0.6rem;
     font-size: 0.88rem;
+}
+
+.p2p-session-banner .btn {
+    width: auto;
+    padding: 0.4rem 1rem;
+    font-size: 0.8rem;
 }
 
 .pulse-dot {
