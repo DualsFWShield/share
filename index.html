@@ -180,6 +180,15 @@
 
                 <!-- ======== TAB: P2P Beam ======== -->
                 <div class="tab-pane" id="tab-p2p">
+                    <!-- Persistent Active Session Banner -->
+                    <div class="p2p-session-banner hidden" id="p2p-session-banner">
+                        <div class="session-info">
+                            <span class="pulse-dot"></span>
+                            <span class="session-text">Beam Connected: <strong id="p2p-connected-peer-name">Peer</strong></span>
+                        </div>
+                        <button id="p2p-disconnect-btn" class="btn danger small">Disconnect</button>
+                    </div>
+
                     <div class="p2p-mode-selector" id="p2p-mode-selector">
                         <button class="mode-btn active" data-p2p-mode="send">
                             <span class="mode-icon">📤</span>
@@ -193,12 +202,27 @@
 
                     <!-- P2P Send -->
                     <div id="p2p-send-view">
-                        <div class="drop-zone" id="drop-zone-p2p">
+                        <!-- Connect to receiver bar -->
+                        <div class="p2p-connect-box" id="p2p-send-connect-box">
+                            <div class="connect-input-group">
+                                <input type="text" id="p2p-remote-peer-input" placeholder="Enter Receiver ID or scan QR...">
+                                <button id="p2p-scan-qr-btn" class="btn secondary" title="Scan QR Code with Camera">
+                                    📷 Scan QR
+                                </button>
+                                <button id="p2p-connect-btn" class="btn primary">Connect</button>
+                            </div>
+                            <div class="connect-divider"><span>OR SENDER-FIRST SHARING</span></div>
+                            <button id="p2p-show-sender-qr-btn" class="btn secondary small" style="width:100%;">
+                                📡 Show My Sender Link / QR
+                            </button>
+                        </div>
+
+                        <div class="drop-zone" id="drop-zone-p2p" style="margin-top:1rem;">
                             <div class="icon-wrapper">
                                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10V9C7 6.24 9.24 4 12 4s5 2.24 5 5v1c2.21 0 4 1.79 4 4 0 1.48-.8 2.81-2 3.5M7 10c-2.21 0-4 1.79-4 4 0 1.48.8 2.81 2 3.5M7 10c.33 0 .65.04.96.12M12 12v8m0-8l-3 3m3-3l3 3"/></svg>
                             </div>
-                            <h3>Drop file for P2P transfer</h3>
-                            <p>Direct device-to-device · Unlimited size</p>
+                            <h3>Drop file(s) for P2P transfer</h3>
+                            <p>Select one or multiple files · Unlimited size · Stays open</p>
                             <input type="file" id="file-input-p2p" multiple hidden>
                         </div>
 
@@ -207,6 +231,7 @@
                                 <span class="file-name" id="p2p-filename">file.txt</span>
                                 <span class="file-size" id="p2p-filesize">0 B</span>
                             </div>
+                            <div class="file-chips-list hidden" id="p2p-file-chips"></div>
 
                             <label class="toggle-switch">
                                 <input type="checkbox" id="p2p-encrypt-toggle">
@@ -218,10 +243,10 @@
                                 <input type="password" id="p2p-password" placeholder="Encryption password">
                             </div>
 
-                            <button id="p2p-start-send-btn" class="btn primary" style="margin-top:1rem;">Start Beam</button>
+                            <button id="p2p-start-send-btn" class="btn primary" style="margin-top:1rem;">🚀 Send Files</button>
                         </div>
 
-                        <!-- Waiting for receiver -->
+                        <!-- Waiting for receiver (Sender-First mode) -->
                         <div class="hidden" id="p2p-send-waiting">
                             <div class="waiting-indicator">
                                 <div class="pulse-ring">📡</div>
@@ -253,14 +278,30 @@
 
                     <!-- P2P Receive -->
                     <div class="hidden" id="p2p-recv-view">
-                        <div class="waiting-indicator" id="p2p-recv-waiting">
-                            <div class="pulse-ring">📥</div>
-                            <p id="p2p-recv-status">Initializing...</p>
+                        <div class="setting-row" style="margin-bottom: 0.8rem;">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="p2p-auto-download" checked>
+                                <span class="slider"></span>
+                                <span class="label-text">⚡ Auto-download received files</span>
+                            </label>
                         </div>
-                        <div class="qr-container hidden" id="p2p-recv-qr">
-                            <div id="p2p-recv-qrcode"></div>
+
+                        <div id="p2p-recv-wait-box">
+                            <div class="waiting-indicator" id="p2p-recv-waiting">
+                                <div class="pulse-ring">📥</div>
+                                <p id="p2p-recv-status">Initializing Room...</p>
+                            </div>
+                            <div class="qr-container hidden" id="p2p-recv-qr">
+                                <div id="p2p-recv-qrcode"></div>
+                            </div>
+                            <p class="status-msg info hidden" id="p2p-recv-id-display"></p>
+
+                            <div style="margin-top:1rem; text-align:center;">
+                                <button id="p2p-recv-scan-btn" class="btn secondary">
+                                    📷 Scan Sender QR Code
+                                </button>
+                            </div>
                         </div>
-                        <p class="status-msg info hidden" id="p2p-recv-id-display"></p>
 
                         <!-- Incoming Transfer -->
                         <div class="hidden" id="p2p-recv-transfer">
@@ -274,9 +315,14 @@
                             </div>
                         </div>
 
-                        <div class="hidden" id="p2p-recv-done">
-                            <p class="status-msg success">Transfer complete!</p>
-                            <button class="btn primary" id="p2p-recv-download-btn" style="margin-top:1rem;">Download File</button>
+                        <!-- Session Received Files List -->
+                        <div class="received-list-box" id="p2p-received-container" style="margin-top:1.2rem;">
+                            <div class="received-list-header">
+                                <h4>Session Files (<span id="p2p-received-count">0</span>)</h4>
+                            </div>
+                            <div class="received-items" id="p2p-received-items">
+                                <p class="text-muted" id="p2p-no-files-msg" style="text-align:center; font-size:0.85rem; padding:0.8rem 0;">Ready for incoming files. Channel stays open!</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -300,9 +346,9 @@
                             <div class="icon-wrapper">
                                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
                             </div>
-                            <h3>Drop file for QR Stream</h3>
+                            <h3>Drop file(s) for QR Stream</h3>
                             <p>Animated QR code sequence · 100% offline</p>
-                            <input type="file" id="file-input-qrs" hidden>
+                            <input type="file" id="file-input-qrs" multiple hidden>
                         </div>
 
                         <div class="hidden" id="qrs-send-options">
@@ -346,6 +392,13 @@
 
                     <!-- QR Stream Receive (Camera Scan) -->
                     <div class="hidden" id="qrs-recv-view">
+                        <div class="setting-row" style="margin-bottom:0.8rem;">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="qrs-auto-download" checked>
+                                <span class="slider"></span>
+                                <span class="label-text">⚡ Auto-download on completion</span>
+                            </label>
+                        </div>
                         <div class="camera-scanner" id="qrs-camera-container">
                             <video id="qrs-camera-video" autoplay playsinline muted></video>
                             <div class="scan-overlay"><div class="scan-frame"></div></div>
@@ -502,9 +555,31 @@
                     <p class="progress-text" id="recv-progress-text">Connecting...</p>
                 </div>
 
-                <button id="download-btn" class="btn primary" style="margin-top:1.5rem;" disabled>Download File</button>
+                <div class="setting-row" style="margin: 0.8rem auto 0; justify-content: center;">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="recv-auto-download" checked>
+                        <span class="slider"></span>
+                        <span class="label-text">⚡ Auto-download file</span>
+                    </label>
+                </div>
+
+                <button id="download-btn" class="btn primary" style="margin-top:1.2rem;" disabled>Download File</button>
             </div>
         </section>
+
+        <!-- Universal QR Scanner Modal -->
+        <div class="overlay hidden" id="qr-scanner-modal">
+            <div class="modal-content scanner-modal-box">
+                <button class="close-btn" id="qr-scanner-close-btn">&times;</button>
+                <h3 style="margin-bottom:0.3rem;">📷 Scan QR Code</h3>
+                <p class="text-muted" style="font-size:0.82rem; margin-bottom:1rem;">Point camera at peer QR code or share link</p>
+                <div class="camera-scanner" style="margin-bottom: 1rem;">
+                    <video id="qr-scanner-video" autoplay playsinline muted></video>
+                    <div class="scan-overlay"><div class="scan-frame"></div></div>
+                </div>
+                <p class="status-msg info" id="qr-scanner-status">Searching for QR code...</p>
+            </div>
+        </div>
 
         <!-- Camouflage Layer -->
         <div id="camouflage-layer" class="hidden">
