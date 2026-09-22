@@ -142,7 +142,10 @@ body {
 /* ---- Header ---- */
 header {
     text-align: center;
-    padding: 2.5rem 2rem 1.2rem;
+    padding: 2.2rem 2rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .logo {
@@ -162,6 +165,62 @@ header {
     color: var(--text-muted);
     font-weight: 300;
     letter-spacing: 0.5px;
+}
+
+/* Header Room Pill (Tout en haut) */
+.header-room-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.45rem 1.1rem;
+    margin-top: 0.85rem;
+    background: rgba(0, 229, 255, 0.08);
+    border: 1px solid rgba(0, 229, 255, 0.35);
+    border-radius: 999px;
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 0 20px rgba(0, 229, 255, 0.15);
+    user-select: none;
+}
+
+.header-room-pill:hover {
+    background: rgba(0, 229, 255, 0.16);
+    border-color: rgba(0, 229, 255, 0.6);
+    transform: translateY(-1px);
+    box-shadow: 0 0 25px rgba(0, 229, 255, 0.3);
+}
+
+.header-room-pill .pill-label {
+    color: var(--text-muted);
+    font-weight: 500;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.header-room-pill .pill-code {
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: 800;
+    font-size: 1.15rem;
+    color: #fff;
+    letter-spacing: 0.12em;
+    text-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+}
+
+.header-room-pill .pill-persona {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--accent-cyan);
+    padding-left: 0.35rem;
+    border-left: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.header-room-pill .pill-copy-icon {
+    font-size: 0.9rem;
+    opacity: 0.7;
+    margin-left: 0.2rem;
 }
 
 /* ============================================================
@@ -788,30 +847,223 @@ select option {
     padding-bottom: 0.5rem;
 }
 
-/* ---- P2P Active Session Banner ---- */
-.p2p-session-banner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.75rem 1rem;
-    margin-bottom: 1rem;
-    background: rgba(34, 197, 94, 0.1);
-    border: 1px solid rgba(34, 197, 94, 0.3);
-    border-radius: var(--radius-md);
+/* ---- Room Code Hero (Tout en haut) ---- */
+.room-code-hero {
+    text-align: center;
+    padding: 1.35rem 1.25rem 1.1rem;
+    background: linear-gradient(135deg, rgba(0, 229, 255, 0.09), rgba(168, 85, 247, 0.09));
+    border: 1px solid rgba(0, 229, 255, 0.3);
+    border-radius: var(--radius-lg);
+    margin-bottom: 1.2rem;
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(16px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     animation: fadeSlideIn 0.3s ease;
 }
 
-.p2p-session-banner .session-info {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    font-size: 0.88rem;
+.room-code-hero::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 15%;
+    right: 15%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
 }
 
-.p2p-session-banner .btn {
+.hero-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.65rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.hero-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: var(--accent-cyan);
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.hero-persona-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--glass-border);
+    border-radius: 999px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.hero-code-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin: 0.5rem 0;
+    flex-wrap: wrap;
+}
+
+.hero-code {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 2.3rem;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+    color: #ffffff;
+    background: rgba(0, 0, 0, 0.45);
+    padding: 0.35rem 1.25rem;
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(0, 229, 255, 0.45);
+    text-shadow: 0 0 16px rgba(0, 229, 255, 0.65);
+    user-select: all;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.hero-code:hover {
+    transform: scale(1.03);
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 20px var(--accent-cyan-glow);
+}
+
+.hero-code-row .btn {
     width: auto;
-    padding: 0.4rem 1rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+}
+
+.hero-status {
+    font-size: 0.86rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+.qr-collapsible {
+    margin-top: 0.9rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.connected-peers-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.9rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    text-align: left;
+}
+
+.peers-bar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.peers-bar-header .btn {
+    width: auto;
+    padding: 0.25rem 0.65rem;
+    font-size: 0.72rem;
+}
+
+/* Backward compatibility for legacy session banner */
+.p2p-session-banner {
+    display: none;
+}
+
+.peers-label {
     font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.03em;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.peers-chips-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    align-items: center;
+}
+
+.peer-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.25rem 0.7rem;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--glass-border);
+    border-radius: 999px;
+    font-size: 0.84rem;
+    color: var(--text-main);
+    transition: transform var(--transition-fast), background var(--transition-fast);
+}
+
+.peer-chip:hover {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.peer-chip.is-self {
+    border-color: rgba(99, 102, 241, 0.4);
+    background: rgba(99, 102, 241, 0.12);
+}
+
+.peer-chip.is-host {
+    border-color: rgba(34, 197, 94, 0.4);
+    background: rgba(34, 197, 94, 0.12);
+}
+
+.peer-chip .peer-emoji {
+    font-size: 1.05rem;
+    line-height: 1;
+}
+
+.peer-chip .peer-name {
+    font-weight: 600;
+}
+
+.peer-chip .peer-id-code {
+    font-family: monospace;
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    background: rgba(0, 0, 0, 0.25);
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+}
+
+.peer-chip .peer-badge {
+    font-size: 0.68rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 700;
+}
+
+.peer-chip.is-self .peer-badge {
+    background: rgba(99, 102, 241, 0.3);
+    color: #c7d2fe;
+}
+
+.peer-chip.is-host .peer-badge {
+    background: rgba(34, 197, 94, 0.3);
+    color: #bbf7d0;
 }
 
 .pulse-dot {
@@ -849,6 +1101,29 @@ select option {
     border-radius: var(--radius-sm);
     color: var(--text-main);
     min-width: 120px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+}
+
+.connect-input-group input::placeholder {
+    text-transform: none;
+    letter-spacing: normal;
+    font-weight: normal;
+}
+
+#p2p-recv-id-display {
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    user-select: all;
+    transition: transform var(--transition-fast), color var(--transition-fast);
+}
+
+#p2p-recv-id-display:hover {
+    color: var(--accent-purple-light);
+    transform: scale(1.02);
 }
 
 .connect-input-group input:focus {

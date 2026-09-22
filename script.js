@@ -12,11 +12,19 @@ class App {
         this.receivedBlob = null;
         this.receivedHeader = null;
         this._pendingReceiverPeerId = null;
+        this.activeRoomId = null;
+        this.isRoomHost = true;
 
         this._bindDom();
         this._setupP2PEngineListeners();
         this._bindEvents();
         this._handleRouting();
+
+        // P2P Beam is now the first tab — initialize immediately so the room code is ready tout en haut!
+        const currentHash = window.location.hash || '';
+        if (!currentHash.includes('BEAM') && !currentHash.includes('P2P_RECV')) {
+            this._initP2PConnectionInfo();
+        }
 
         window.addEventListener('hashchange', () => this._handleRouting());
     }
@@ -68,12 +76,34 @@ class App {
 
             // --- P2P Mode ---
             p2p: {
+                // Header Room Pill (tout en haut)
+                headerRoomPill: document.getElementById('header-room-pill'),
+                headerRoomCode: document.getElementById('header-room-code'),
+                headerRoomPersona: document.getElementById('header-room-persona'),
+
+                // Top Room Hero Card (tout en haut)
+                topRoomCard: document.getElementById('p2p-top-room-card'),
+                topRoomCode: document.getElementById('p2p-top-room-code'),
+                roomBadgeTitle: document.getElementById('p2p-room-badge-title'),
+                topPersonaTag: document.getElementById('p2p-top-persona-tag'),
+                topPersonaEmoji: document.getElementById('p2p-top-persona-emoji'),
+                topPersonaName: document.getElementById('p2p-top-persona-name'),
+                heroCopyBtn: document.getElementById('p2p-hero-copy-btn'),
+                toggleQrBtn: document.getElementById('p2p-toggle-qr-btn'),
+                qrCollapsible: document.getElementById('p2p-qr-collapsible'),
+
                 connectView: document.getElementById('p2p-connect-view'),
                 dashboardView: document.getElementById('p2p-dashboard-view'),
                 sessionBanner: document.getElementById('p2p-session-banner'),
                 connectedPeerName: document.getElementById('p2p-connected-peer-name'),
                 disconnectBtn: document.getElementById('p2p-disconnect-btn'),
+                peersBar: document.getElementById('p2p-connected-peers-bar'),
+                peersCount: document.getElementById('p2p-peers-count'),
+                peersList: document.getElementById('p2p-peers-list'),
+                myIdentityBadge: document.getElementById('p2p-my-identity-badge'),
                 connectBox: document.getElementById('p2p-send-connect-box'),
+                roomTitle: document.getElementById('p2p-room-info-title'),
+                roomBox: document.getElementById('p2p-room-info-box'),
                 remotePeerInput: document.getElementById('p2p-remote-peer-input'),
                 scanQrBtn: document.getElementById('p2p-scan-qr-btn'),
                 connectBtn: document.getElementById('p2p-connect-btn'),
@@ -284,6 +314,17 @@ class App {
         this.dom.p2p.encryptToggle.addEventListener('change', (e) => {
             this.dom.p2p.passwordGroup.classList.toggle('hidden', !e.target.checked);
         });
+        this.dom.p2p.remotePeerInput?.addEventListener('input', (e) => {
+            const val = e.target.value;
+            if (val && val.length <= 6 && !val.includes('|') && !val.includes('#')) {
+                const upper = val.toUpperCase();
+                if (upper !== val) {
+                    const pos = e.target.selectionStart;
+                    e.target.value = upper;
+                    e.target.setSelectionRange(pos, pos);
+                }
+            }
+        });
         this.dom.p2p.connectBtn?.addEventListener('click', () => {
             const raw = this.dom.p2p.remotePeerInput.value.trim();
             const id = this._parsePeerIdFromScanned(raw);
@@ -300,12 +341,30 @@ class App {
         });
         this.dom.p2p.startSendBtn.addEventListener('click', () => this._startP2PSend());
         this.dom.p2p.sendCopyBtn?.addEventListener('click', () => this._copyToClipboard(this.dom.p2p.sendUrl.value));
+        this.dom.p2p.topRoomCode?.addEventListener('click', () => {
+            if (this.activeRoomId) this._copyToClipboard(this.activeRoomId);
+        });
+        this.dom.p2p.heroCopyBtn?.addEventListener('click', () => {
+            if (this.activeRoomId) this._copyToClipboard(this.activeRoomId);
+        });
+        this.dom.p2p.headerRoomPill?.addEventListener('click', () => {
+            if (this.activeRoomId) this._copyToClipboard(this.activeRoomId);
+        });
+        this.dom.p2p.toggleQrBtn?.addEventListener('click', () => {
+            this.dom.p2p.qrCollapsible?.classList.toggle('hidden');
+        });
         this.dom.p2p.recvIdDisplay?.addEventListener('click', () => {
             if (this.dom.p2p.recvIdDisplay.dataset.peerId) {
                 this._copyToClipboard(this.dom.p2p.recvIdDisplay.dataset.peerId);
             }
         });
-        this.dom.p2p.disconnectBtn?.addEventListener('click', () => window.p2pEngine.disconnect());
+        this.dom.p2p.disconnectBtn?.addEventListener('click', () => {
+            window.p2pEngine.disconnect();
+            this.activeRoomId = window.p2pEngine.peerId;
+            this.isRoomHost = true;
+            this.roomRoster = null;
+            this._updateP2PConnectionUI();
+        });
 
         // ---- QR Stream Mode ----
         this._setupDropZone(this.dom.qrs.dropZone, this.dom.qrs.fileInput, (file, isZip, count) => this._onFileSelectedQRS(file, isZip, count));
@@ -804,12 +863,146 @@ class App {
             str = str.split('#')[1];
         }
         if (str.startsWith('P2P_RECV|')) {
-            return str.split('|')[1];
+            str = str.split('|')[1];
+        } else if (str.startsWith('BEAM|')) {
+            str = str.split('|')[1];
         }
-        if (str.startsWith('BEAM|')) {
-            return str.split('|')[1];
+        str = str.trim();
+        if (str.length === 6 && /^[a-zA-Z0-9]{6}$/.test(str)) {
+            str = str.toUpperCase();
         }
         return str;
+    }
+
+    _formatPeerId(id) {
+        if (!id) return '';
+        return id.length > 8 ? `${id.substring(0, 8)}...` : id;
+    }
+
+    _getAnimalPersona(peerId) {
+        if (!peerId) {
+            return { id: '', name: 'Compagnon Inconnu', animal: 'Compagnon', adjective: 'Inconnu', emoji: '👤', fullName: '👤 Compagnon Inconnu' };
+        }
+
+        const cleanId = peerId.trim().toUpperCase();
+
+        const animals = [
+            { name: 'Renard', emoji: '🦊' },
+            { name: 'Chouette', emoji: '🦉' },
+            { name: 'Serpent', emoji: '🐍' },
+            { name: 'Loup', emoji: '🐺' },
+            { name: 'Faucon', emoji: '🦅' },
+            { name: 'Ours', emoji: '🐻' },
+            { name: 'Tigre', emoji: '🐯' },
+            { name: 'Lion', emoji: '🦁' },
+            { name: 'Panda', emoji: '🐼' },
+            { name: 'Koala', emoji: '🐨' },
+            { name: 'Loutre', emoji: '🦦' },
+            { name: 'Hérisson', emoji: '🦔' },
+            { name: 'Castor', emoji: '🦫' },
+            { name: 'Cerf', emoji: '🦌' },
+            { name: 'Dauphin', emoji: '🐬' },
+            { name: 'Aigle', emoji: '🦅' },
+            { name: 'Lynx', emoji: '🐱' },
+            { name: 'Caméléon', emoji: '🦎' },
+            { name: 'Écureuil', emoji: '🐿️' },
+            { name: 'Corbeau', emoji: '🐦‍⬛' },
+            { name: 'Raton', emoji: '🦝' },
+            { name: 'Manchot', emoji: '🐧' },
+            { name: 'Panthère', emoji: '🐆' },
+            { name: 'Gazelle', emoji: '🦌' },
+            { name: 'Léopard', emoji: '🐆' },
+            { name: 'Hibou', emoji: '🦉' },
+            { name: 'Baleine', emoji: '🐋' },
+            { name: 'Blaireau', emoji: '🦡' },
+            { name: 'Kangourou', emoji: '🦘' },
+            { name: 'Flamant', emoji: '🦩' },
+            { name: 'Tortue', emoji: '🐢' },
+            { name: 'Morse', emoji: '🦭' }
+        ];
+
+        const adjectives = [
+            'Penseur', 'Sauvage', 'Curieux', 'Malin', 'Audacieux',
+            'Rapide', 'Serein', 'Agile', 'Rusé', 'Vaillant',
+            'Mystique', 'Silencieux', 'Cosmique', 'Lunaire', 'Solaire',
+            'Astral', 'Électrique', 'Patient', 'Invisible', 'Brillant',
+            'Noble', 'Vif', 'Éveillé', 'Fidèle', 'Brave',
+            'Espiègle', 'Sage', 'Intrépide', 'Flamboyant', 'Zen'
+        ];
+
+        let h1 = 5381;
+        let h2 = 52711;
+        for (let i = 0; i < cleanId.length; i++) {
+            const code = cleanId.charCodeAt(i);
+            h1 = ((h1 << 5) + h1) ^ code;
+            h2 = ((h2 << 5) + h2) ^ (code * (i + 7));
+        }
+
+        const animal = animals[Math.abs(h1) % animals.length];
+        const adjective = adjectives[Math.abs(h2) % adjectives.length];
+        const fullName = `${animal.emoji} ${animal.name} ${adjective}`;
+
+        return {
+            id: cleanId,
+            name: `${animal.name} ${adjective}`,
+            animal: animal.name,
+            adjective,
+            emoji: animal.emoji,
+            fullName
+        };
+    }
+
+    _renderConnectedPeersList(currentRoom, peers) {
+        if (!this.dom.p2p.peersList) return;
+        this.dom.p2p.peersList.innerHTML = '';
+
+        const myId = (window.p2pEngine.peerId || '').toUpperCase();
+        const roomId = (currentRoom || '').toUpperCase();
+
+        // Unique set of all participants: myself + connected remote peers + room roster
+        const allMemberIds = [];
+        if (myId) allMemberIds.push(myId);
+        peers.forEach(p => {
+            const up = (p || '').toUpperCase();
+            if (up && !allMemberIds.includes(up)) {
+                allMemberIds.push(up);
+            }
+        });
+        if (Array.isArray(this.roomRoster)) {
+            this.roomRoster.forEach(r => {
+                const up = (r || '').toUpperCase();
+                if (up && !allMemberIds.includes(up)) {
+                    allMemberIds.push(up);
+                }
+            });
+        }
+
+        // Update count badge
+        if (this.dom.p2p.peersCount) {
+            this.dom.p2p.peersCount.textContent = allMemberIds.length;
+        }
+
+        allMemberIds.forEach(id => {
+            const persona = this._getAnimalPersona(id);
+            const isSelf = (id === myId);
+            const isHost = (id === roomId);
+
+            let badgeText = '';
+            if (isSelf && isHost) badgeText = 'Hôte (Vous)';
+            else if (isSelf) badgeText = 'Vous';
+            else if (isHost) badgeText = 'Hôte';
+
+            const chip = document.createElement('div');
+            chip.className = `peer-chip${isSelf ? ' is-self' : ''}${isHost ? ' is-host' : ''}`;
+            chip.title = `${persona.fullName} [${id}]${badgeText ? ` • ${badgeText}` : ''}`;
+            chip.innerHTML = `
+                <span class="peer-emoji">${persona.emoji}</span>
+                <span class="peer-name">${persona.name}</span>
+                <span class="peer-id-code">${id}</span>
+                ${badgeText ? `<span class="peer-badge">${badgeText}</span>` : ''}
+            `;
+            this.dom.p2p.peersList.appendChild(chip);
+        });
     }
 
     // ============================================================
@@ -817,14 +1010,63 @@ class App {
     // ============================================================
 
     _setupP2PEngineListeners() {
-        window.p2pEngine.on('connected', (peerId) => {
+        window.p2pEngine.on('connected', (peerId, isOutbound) => {
+            if (isOutbound) {
+                this.activeRoomId = peerId;
+                this.isRoomHost = false;
+            } else if (!this.activeRoomId) {
+                this.activeRoomId = window.p2pEngine.peerId;
+                this.isRoomHost = true;
+            }
+            const peerPersona = this._getAnimalPersona(peerId);
             this._updateP2PConnectionUI();
-            this._showToast(`Connected to peer: ${peerId.substring(0, 8)}...`, 'success');
+            this._showToast(`${peerPersona.fullName} a rejoint le salon !`, 'success');
+
+            // If we are host, broadcast updated room roster to all connected peers
+            if (this.isRoomHost) {
+                const roster = [
+                    (window.p2pEngine.peerId || '').toUpperCase(),
+                    ...window.p2pEngine.getConnectedPeers().map(p => (p || '').toUpperCase())
+                ];
+                setTimeout(() => {
+                    window.p2pEngine.sendMessage({
+                        type: '__p2p_room_roster__',
+                        roomId: this.activeRoomId,
+                        members: roster
+                    });
+                }, 300);
+            }
         });
 
         window.p2pEngine.on('disconnected', (peerId) => {
+            const peerPersona = this._getAnimalPersona(peerId);
+            if (!window.p2pEngine.isConnected()) {
+                this.activeRoomId = window.p2pEngine.peerId;
+                this.isRoomHost = true;
+                this.roomRoster = null;
+            } else if (this.isRoomHost) {
+                const roster = [
+                    (window.p2pEngine.peerId || '').toUpperCase(),
+                    ...window.p2pEngine.getConnectedPeers().map(p => (p || '').toUpperCase())
+                ];
+                window.p2pEngine.sendMessage({
+                    type: '__p2p_room_roster__',
+                    roomId: this.activeRoomId,
+                    members: roster
+                });
+            }
             this._updateP2PConnectionUI();
-            this._showToast(`Peer disconnected: ${peerId.substring(0, 8)}...`, 'info');
+            this._showToast(`${peerPersona.fullName} a quitté le salon.`, 'info');
+        });
+
+        window.p2pEngine.on('message', (peerId, data) => {
+            if (data && data.type === '__p2p_room_roster__') {
+                if (Array.isArray(data.members)) {
+                    this.roomRoster = data.members;
+                    if (data.roomId) this.activeRoomId = data.roomId;
+                    this._updateP2PConnectionUI();
+                }
+            }
         });
 
         window.p2pEngine.on('meta', (peerId, meta) => {
@@ -840,29 +1082,136 @@ class App {
         });
 
         window.p2pEngine.on('error', (err, peerId) => {
-            const idStr = peerId ? ` [${peerId.substring(0, 8)}]` : '';
+            const idStr = peerId ? ` [${this._getAnimalPersona(peerId).name}]` : '';
             this._showToast(`P2P${idStr}: ` + (err.message || err), 'error');
         });
+    }
+
+    _renderRoomQR(url) {
+        if (!this.dom.p2p.recvQr || !this.dom.p2p.recvQrcode) return;
+        this.dom.p2p.recvQr.classList.remove('hidden');
+        this.dom.p2p.recvQrcode.innerHTML = '';
+        try {
+            const qr = qrcode(0, 'L');
+            qr.addData(url);
+            qr.make();
+            this.dom.p2p.recvQrcode.innerHTML = qr.createImgTag(4, 8);
+            const img = this.dom.p2p.recvQrcode.querySelector('img');
+            if (img) {
+                img.style.width = '100%';
+                img.style.height = 'auto';
+                img.style.imageRendering = 'pixelated';
+            }
+        } catch (e) {
+            console.error('[P2P] QR render error:', e);
+        }
     }
 
     _updateP2PConnectionUI() {
         const isConnected = window.p2pEngine.isConnected();
         if (isConnected) {
             const peers = window.p2pEngine.getConnectedPeers();
-            this.dom.p2p.sessionBanner?.classList.remove('hidden');
-            if (this.dom.p2p.connectedPeerName) {
-                if (peers.length === 1) {
-                    this.dom.p2p.connectedPeerName.textContent = `${peers[0].substring(0, 8)}...`;
-                } else {
-                    this.dom.p2p.connectedPeerName.textContent = `${peers.length} Peers (Room)`;
-                }
+            if (!this.activeRoomId) {
+                this.activeRoomId = (!this.isRoomHost && peers.length > 0) ? peers[0] : window.p2pEngine.peerId;
             }
-            this.dom.p2p.dashboardView?.classList.remove('hidden');
-        } else {
-            this.dom.p2p.sessionBanner?.classList.add('hidden');
-            this.dom.p2p.dashboardView?.classList.add('hidden');
+
+            const currentRoom = (this.activeRoomId || window.p2pEngine.peerId || '').toUpperCase();
+            const myId = (window.p2pEngine.peerId || '').toUpperCase();
+            const roomUrl = `${location.origin}${location.pathname}#P2P_RECV|${currentRoom}`;
+            const hostPersona = this._getAnimalPersona(currentRoom);
+            const myPersona = this._getAnimalPersona(myId);
+
+            // 1. Header Room Pill (tout en haut)
+            if (this.dom.p2p.headerRoomPill) {
+                this.dom.p2p.headerRoomPill.classList.remove('hidden');
+                if (this.dom.p2p.headerRoomCode) this.dom.p2p.headerRoomCode.textContent = currentRoom;
+                if (this.dom.p2p.headerRoomPersona) this.dom.p2p.headerRoomPersona.textContent = `${myPersona.emoji} ${myPersona.name}`;
+            }
+
+            // 2. Top Room Hero Card (tout en haut du tab P2P)
+            if (this.dom.p2p.topRoomCode) this.dom.p2p.topRoomCode.textContent = currentRoom;
+            if (this.dom.p2p.roomBadgeTitle) this.dom.p2p.roomBadgeTitle.textContent = `SALON EN COURS (${currentRoom})`;
+            if (this.dom.p2p.topPersonaEmoji) this.dom.p2p.topPersonaEmoji.textContent = myPersona.emoji;
+            if (this.dom.p2p.topPersonaName) this.dom.p2p.topPersonaName.textContent = `${myPersona.name} (Vous)`;
+            if (this.dom.p2p.disconnectBtn) this.dom.p2p.disconnectBtn.classList.remove('hidden');
+
+            // Hide the "Rejoindre un salon" input box while connected
+            this.dom.p2p.connectBox?.classList.add('hidden');
+
+            const totalParticipants = peers.length + 1;
+            const countText = totalParticipants === 1 ? '1 personne connectée' : `${totalParticipants} personnes connectées`;
             if (this.dom.p2p.recvStatus) {
-                this.dom.p2p.recvStatus.textContent = 'Waiting for connection...';
+                this.dom.p2p.recvStatus.textContent = `Connecté au salon ${currentRoom} (${hostPersona.name}) — ${countText}`;
+            }
+
+            // Render all members of the room as chips with animal avatars
+            this._renderConnectedPeersList(currentRoom, peers);
+
+            // Backward compatibility
+            if (this.dom.p2p.connectedPeerName) {
+                this.dom.p2p.connectedPeerName.textContent = `${currentRoom} (${hostPersona.name})`;
+            }
+            if (this.dom.p2p.roomTitle) {
+                this.dom.p2p.roomTitle.textContent = `Room : ${currentRoom} (${hostPersona.name})`;
+            }
+            if (this.dom.p2p.recvIdDisplay) {
+                this.dom.p2p.recvIdDisplay.textContent = `Room ID: ${currentRoom} (${hostPersona.fullName})`;
+                this.dom.p2p.recvIdDisplay.dataset.peerId = currentRoom;
+            }
+            if (this.dom.p2p.shareLinkBox) {
+                this.dom.p2p.shareLinkBox.classList.remove('hidden');
+                this.dom.p2p.sendUrl.value = roomUrl;
+            }
+            this._renderRoomQR(roomUrl);
+
+        } else {
+            // Show the "Rejoindre un salon" input box again
+            this.dom.p2p.connectBox?.classList.remove('hidden');
+            if (this.dom.p2p.disconnectBtn) this.dom.p2p.disconnectBtn.classList.add('hidden');
+
+            // Reset room to our own local peer ID
+            this.activeRoomId = (window.p2pEngine.peerId || '').toUpperCase() || null;
+            this.isRoomHost = true;
+
+            if (this.activeRoomId) {
+                const myUrl = `${location.origin}${location.pathname}#P2P_RECV|${this.activeRoomId}`;
+                const myPersona = this._getAnimalPersona(this.activeRoomId);
+
+                // 1. Header Room Pill (tout en haut)
+                if (this.dom.p2p.headerRoomPill) {
+                    this.dom.p2p.headerRoomPill.classList.remove('hidden');
+                    if (this.dom.p2p.headerRoomCode) this.dom.p2p.headerRoomCode.textContent = this.activeRoomId;
+                    if (this.dom.p2p.headerRoomPersona) this.dom.p2p.headerRoomPersona.textContent = `${myPersona.emoji} ${myPersona.name}`;
+                }
+
+                // 2. Top Room Hero Card (tout en haut du tab P2P)
+                if (this.dom.p2p.topRoomCode) this.dom.p2p.topRoomCode.textContent = this.activeRoomId;
+                if (this.dom.p2p.roomBadgeTitle) this.dom.p2p.roomBadgeTitle.textContent = 'CODE DE VOTRE SALON P2P';
+                if (this.dom.p2p.topPersonaEmoji) this.dom.p2p.topPersonaEmoji.textContent = myPersona.emoji;
+                if (this.dom.p2p.topPersonaName) this.dom.p2p.topPersonaName.textContent = `${myPersona.name} (Vous)`;
+
+                if (this.dom.p2p.recvStatus) {
+                    this.dom.p2p.recvStatus.textContent = `Vous êtes ${myPersona.fullName} — En attente d'un pair pour se connecter`;
+                }
+
+                // Render peers list (which will display self as Hôte)
+                this._renderConnectedPeersList(this.activeRoomId, []);
+
+                // Backward compatibility
+                if (this.dom.p2p.roomTitle) {
+                    this.dom.p2p.roomTitle.textContent = `Votre Salon : ${myPersona.name}`;
+                }
+                if (this.dom.p2p.recvIdDisplay) {
+                    this.dom.p2p.recvIdDisplay.textContent = `Room ID: ${this.activeRoomId} (${myPersona.fullName})`;
+                    this.dom.p2p.recvIdDisplay.dataset.peerId = this.activeRoomId;
+                }
+                if (this.dom.p2p.shareLinkBox) {
+                    this.dom.p2p.shareLinkBox.classList.remove('hidden');
+                    this.dom.p2p.sendUrl.value = myUrl;
+                }
+                this._renderRoomQR(myUrl);
+            } else if (this.dom.p2p.recvStatus) {
+                this.dom.p2p.recvStatus.textContent = 'Initialisation du salon en cours...';
             }
         }
     }
@@ -873,16 +1222,28 @@ class App {
             return;
         }
 
+        const normalizedId = (peerId.length === 6 && /^[a-zA-Z0-9]{6}$/.test(peerId.trim()))
+            ? peerId.trim().toUpperCase()
+            : peerId.trim();
+
         try {
             if (this.dom.p2p.connectBtn) {
                 this.dom.p2p.connectBtn.disabled = true;
                 this.dom.p2p.connectBtn.textContent = 'Connecting...';
             }
-            this._showToast(`Connecting to ${peerId.substring(0, 8)}...`, 'info');
-            await window.p2pEngine.connectTo(peerId);
+            this._showToast(`Connecting to Room ${this._formatPeerId(normalizedId)}...`, 'info');
+            this.activeRoomId = normalizedId;
+            this.isRoomHost = false;
+            await window.p2pEngine.connectTo(normalizedId);
+            this._updateP2PConnectionUI();
         } catch (err) {
             console.error('P2P Connect error:', err);
             this._showToast('Connection failed: ' + err.message, 'error');
+            if (!window.p2pEngine.isConnected()) {
+                this.activeRoomId = window.p2pEngine.peerId;
+                this.isRoomHost = true;
+                this._updateP2PConnectionUI();
+            }
         } finally {
             if (this.dom.p2p.connectBtn) {
                 this.dom.p2p.connectBtn.disabled = false;
@@ -998,58 +1359,41 @@ class App {
 
     async _initP2PConnectionInfo() {
         if (!this.dom.p2p.recvStatus) return;
-        this.dom.p2p.recvStatus.textContent = 'Initializing Room...';
-        this.dom.p2p.recvQr.classList.add('hidden');
-        this.dom.p2p.recvIdDisplay.classList.add('hidden');
-        this.dom.p2p.shareLinkBox.classList.add('hidden');
+        this.dom.p2p.recvStatus.textContent = 'Initialisation du salon...';
+        this.dom.p2p.recvQr?.classList.add('hidden');
+        this.dom.p2p.recvIdDisplay?.classList.add('hidden');
+        this.dom.p2p.shareLinkBox?.classList.add('hidden');
 
         try {
             const peerId = await window.p2pEngine.init();
-            const hash = window.p2pEngine.getReceiverHash();
-            const fullUrl = `${location.origin}${location.pathname}#${hash}`;
 
-            if (window.p2pEngine.isConnected()) {
-                return; // Already handled by UI update
+            if (!this.activeRoomId || this.isRoomHost) {
+                this.activeRoomId = peerId;
+                this.isRoomHost = true;
             }
 
-            this.dom.p2p.recvStatus.textContent = 'Ready — Waiting for a peer to connect';
-
-            this.dom.p2p.recvQr.classList.remove('hidden');
-            this.dom.p2p.recvQrcode.innerHTML = '';
-            try {
-                const qr = qrcode(0, 'L');
-                qr.addData(fullUrl);
-                qr.make();
-                this.dom.p2p.recvQrcode.innerHTML = qr.createImgTag(4, 8);
-                const img = this.dom.p2p.recvQrcode.querySelector('img');
-                if (img) { img.style.width = '100%'; img.style.height = 'auto'; img.style.imageRendering = 'pixelated'; }
-            } catch (e) { /* ignore */ }
-
-            this.dom.p2p.recvIdDisplay.classList.remove('hidden');
-            this.dom.p2p.recvIdDisplay.textContent = `Peer ID: ${peerId} (Click to copy)`;
-            this.dom.p2p.recvIdDisplay.dataset.peerId = peerId;
-            this.dom.p2p.recvIdDisplay.style.cursor = 'pointer';
-            this.dom.p2p.recvIdDisplay.title = "Click to copy Peer ID";
-            
-            this.dom.p2p.shareLinkBox.classList.remove('hidden');
-            this.dom.p2p.sendUrl.value = fullUrl;
+            this._updateP2PConnectionUI();
 
         } catch (err) {
-            this._showToast('P2P Init failed: ' + err.message, 'error');
-            this.dom.p2p.recvStatus.textContent = 'Initialization failed.';
+            this._showToast('Échec initialisation P2P : ' + err.message, 'error');
+            if (this.dom.p2p.recvStatus) {
+                this.dom.p2p.recvStatus.textContent = 'Échec de l\'initialisation.';
+            }
         }
     }
 
     _onP2PMetaReceived(peerId, meta) {
         this.dom.p2p.recvTransfer.classList.remove('hidden');
         const countLabel = meta.totalFiles > 1 ? `[${meta.fileIndex}/${meta.totalFiles}] ` : '';
-        this.dom.p2p.recvProgressText.textContent = `[${peerId.substring(0,6)}] Receiving ${countLabel}${meta.filename}...`;
+        const sender = this._getAnimalPersona(peerId);
+        this.dom.p2p.recvProgressText.textContent = `[${sender.name}] Réception ${countLabel}${meta.filename}...`;
         this.dom.p2p.recvProgressFill.style.width = '0%';
     }
 
     _onP2PProgressReceived(peerId, percent, received, total, speed) {
+        const sender = this._getAnimalPersona(peerId);
         this.dom.p2p.recvProgressFill.style.width = `${percent}%`;
-        this.dom.p2p.recvProgressText.textContent = `[${peerId.substring(0,6)}] ${percent}% — ${this._formatSize(received)} / ${this._formatSize(total)}`;
+        this.dom.p2p.recvProgressText.textContent = `[${sender.name}] ${percent}% — ${this._formatSize(received)} / ${this._formatSize(total)}`;
         this.dom.p2p.recvSpeed.textContent = `${speed} MB/s`;
         this.dom.p2p.recvPercent.textContent = `${percent}%`;
     }
@@ -1059,9 +1403,12 @@ class App {
 
         const autoDownload = this.dom.p2p.autoDownload ? this.dom.p2p.autoDownload.checked : true;
         const fileId = 'rec_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+        const senderPersona = this._getAnimalPersona(peerId);
 
         const fileRecord = {
             id: fileId,
+            senderId: peerId,
+            senderPersona: senderPersona,
             filename: meta.filename,
             size: meta.size,
             encrypted: meta.encrypted,
@@ -1083,9 +1430,9 @@ class App {
                     if (autoDownload) {
                         this._downloadBlob(decBlob, meta.filename);
                         fileRecord.downloaded = true;
-                        this._showToast(`Decrypted & Auto-downloaded: ${meta.filename}`, 'success');
+                        this._showToast(`Déchiffré & téléchargé : ${meta.filename}`, 'success');
                     } else {
-                        this._showToast(`Decrypted: ${meta.filename}`, 'success');
+                        this._showToast(`Déchiffré : ${meta.filename}`, 'success');
                     }
                 } catch (e) {
                     // Session password wrong for this file
@@ -1093,16 +1440,16 @@ class App {
             }
 
             if (!decrypted) {
-                this._showToast(`Received encrypted file: ${meta.filename}. Click Unlock in list.`, 'info');
+                this._showToast(`Fichier chiffré reçu de ${senderPersona.name} : ${meta.filename}. Déverrouillez dans la liste.`, 'info');
             }
         } else {
             fileRecord.decryptedBlob = blob;
             if (autoDownload) {
                 this._downloadBlob(blob, meta.filename);
                 fileRecord.downloaded = true;
-                this._showToast(`Auto-downloaded: ${meta.filename}`, 'success');
+                this._showToast(`Téléchargé : ${meta.filename} (de ${senderPersona.name})`, 'success');
             } else {
-                this._showToast(`Received: ${meta.filename}`, 'success');
+                this._showToast(`Reçu de ${senderPersona.name} : ${meta.filename}`, 'success');
             }
         }
 
@@ -1117,7 +1464,7 @@ class App {
 
         countEl.textContent = this.sessionReceivedFiles.length;
         if (this.sessionReceivedFiles.length === 0) {
-            list.innerHTML = '<p class="text-muted" style="text-align:center; font-size:0.85rem; padding:0.8rem 0;">Ready for incoming files. Channel stays open!</p>';
+            list.innerHTML = '<p class="text-muted" style="text-align:center; font-size:0.85rem; padding:0.8rem 0;">Salon prêt pour la réception de fichiers.</p>';
             return;
         }
 
@@ -1128,21 +1475,22 @@ class App {
 
             const isReady = Boolean(item.decryptedBlob);
             const icon = item.encrypted && !isReady ? '🔒' : '📄';
+            const senderText = item.senderPersona ? ` · Envoyé par ${item.senderPersona.fullName}` : '';
 
             el.innerHTML = `
                 <div class="received-item-info">
                     <span style="font-size:1.2rem;">${icon}</span>
                     <div>
                         <div class="item-name">${item.filename}</div>
-                        <div class="item-size">${this._formatSize(item.size)} · ${item.time}</div>
+                        <div class="item-size">${this._formatSize(item.size)} · ${item.time}${senderText}</div>
                     </div>
                 </div>
                 <div class="received-item-actions">
                     ${!isReady && item.encrypted ? `
-                        <button class="btn secondary small item-unlock-btn" data-id="${item.id}">Unlock</button>
+                        <button class="btn secondary small item-unlock-btn" data-id="${item.id}">Déverrouiller</button>
                     ` : `
                         <button class="btn primary small item-download-btn" data-id="${item.id}">
-                            ${item.downloaded ? 'Downloaded ✓' : 'Download'}
+                            ${item.downloaded ? 'Téléchargé ✓' : 'Télécharger'}
                         </button>
                     `}
                 </div>
