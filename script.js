@@ -15,6 +15,12 @@ class App {
         this.activeRoomId = null;
         this.isRoomHost = true;
 
+        // NFC State
+        this.nfcHistory = [];
+        this.selectedNFCFile = null;
+        this.activeNFCType = 'text';
+        this._nfcActiveAbort = null;
+
         this._bindDom();
         this._setupP2PEngineListeners();
         this._bindEvents();
@@ -54,11 +60,6 @@ class App {
                 encryptToggle: document.getElementById('url-encrypt-toggle'),
                 passwordGroup: document.getElementById('url-password-group'),
                 password: document.getElementById('url-password'),
-                advToggle: document.getElementById('url-advanced-toggle'),
-                advPanel: document.getElementById('url-advanced-panel'),
-                timebomb: document.getElementById('url-timebomb'),
-                vibe: document.getElementById('url-vibe'),
-                geoToggle: document.getElementById('url-geo-toggle'),
 
                 generateBtn: document.getElementById('url-generate-btn'),
                 result: document.getElementById('url-result'),
@@ -106,6 +107,8 @@ class App {
                 roomBox: document.getElementById('p2p-room-info-box'),
                 remotePeerInput: document.getElementById('p2p-remote-peer-input'),
                 scanQrBtn: document.getElementById('p2p-scan-qr-btn'),
+                scanNfcBtn: document.getElementById('p2p-scan-nfc-btn'),
+                nfcShareBtn: document.getElementById('p2p-nfc-share-btn'),
                 connectBtn: document.getElementById('p2p-connect-btn'),
                 dropZone: document.getElementById('drop-zone-p2p'),
                 fileInput: document.getElementById('file-input-p2p'),
@@ -169,50 +172,44 @@ class App {
                 recvDownloadBtn: document.getElementById('qrs-recv-download-btn'),
             },
 
-            // --- Audio Mode ---
-            audio: {
-                sendView: document.getElementById('audio-send-view'),
-                recvView: document.getElementById('audio-recv-view'),
-                sendText: document.getElementById('audio-send-text'),
-                sendCanvas: document.getElementById('audio-send-canvas'),
-                encryptToggle: document.getElementById('audio-encrypt-toggle'),
-                passwordGroup: document.getElementById('audio-password-group'),
-                password: document.getElementById('audio-password'),
-                protocol: document.getElementById('audio-protocol'),
-                sendBtn: document.getElementById('audio-send-btn'),
-                sendStatus: document.getElementById('audio-send-status'),
-                recvCanvas: document.getElementById('audio-recv-canvas'),
-                recvOutput: document.getElementById('audio-recv-output'),
-                startListenBtn: document.getElementById('audio-start-listen-btn'),
-                stopListenBtn: document.getElementById('audio-stop-listen-btn'),
+            // --- NFC Mode ---
+            nfc: {
+                compatBanner: document.getElementById('nfc-compat-banner'),
+                sendView: document.getElementById('nfc-send-view'),
+                recvView: document.getElementById('nfc-recv-view'),
+                typeBtns: document.querySelectorAll('[data-nfc-type]'),
+                panelText: document.getElementById('nfc-panel-text'),
+                panelUrl: document.getElementById('nfc-panel-url'),
+                panelFile: document.getElementById('nfc-panel-file'),
+                sendText: document.getElementById('nfc-send-text'),
+                textCapacityLabel: document.getElementById('nfc-text-capacity-label'),
+                encryptToggle: document.getElementById('nfc-encrypt-toggle'),
+                passwordGroup: document.getElementById('nfc-password-group'),
+                password: document.getElementById('nfc-password'),
+                sendUrl: document.getElementById('nfc-send-url'),
+                insertP2PUrlBtn: document.getElementById('nfc-insert-p2p-url-btn'),
+                dropZone: document.getElementById('drop-zone-nfc'),
+                fileInput: document.getElementById('file-input-nfc'),
+                fileDetails: document.getElementById('nfc-file-details'),
+                filename: document.getElementById('nfc-filename'),
+                filesize: document.getElementById('nfc-filesize'),
+                strategyCard: document.getElementById('nfc-strategy-card'),
+                strategyBadge: document.getElementById('nfc-strategy-badge'),
+                strategyDesc: document.getElementById('nfc-strategy-desc'),
+                writeBtn: document.getElementById('nfc-write-btn'),
+                writeBtnText: document.getElementById('nfc-write-btn-text'),
+                writeStatus: document.getElementById('nfc-write-status'),
+                recvRadar: document.getElementById('nfc-recv-radar'),
+                recvStatusTitle: document.getElementById('nfc-recv-status-title'),
+                recvStatusDesc: document.getElementById('nfc-recv-status-desc'),
+                startScanBtn: document.getElementById('nfc-start-scan-btn'),
+                stopScanBtn: document.getElementById('nfc-stop-scan-btn'),
+                historySection: document.getElementById('nfc-history-section'),
+                recordsCount: document.getElementById('nfc-records-count'),
+                clearHistoryBtn: document.getElementById('nfc-clear-history-btn'),
+                cardsList: document.getElementById('nfc-cards-list'),
             },
 
-            // --- Color Mode ---
-            color: {
-                sendView: document.getElementById('color-send-view'),
-                recvView: document.getElementById('color-recv-view'),
-                sendText: document.getElementById('color-send-text'),
-                sendCanvas: document.getElementById('color-send-canvas'),
-                encryptToggle: document.getElementById('color-encrypt-toggle'),
-                passwordGroup: document.getElementById('color-password-group'),
-                password: document.getElementById('color-password'),
-                speed: document.getElementById('color-speed'),
-                sendBtn: document.getElementById('color-send-btn'),
-                stopBtn: document.getElementById('color-stop-btn'),
-                cameraVideo: document.getElementById('color-camera-video'),
-                recvOutput: document.getElementById('color-recv-output'),
-                startScanBtn: document.getElementById('color-start-scan-btn'),
-                stopScanBtn: document.getElementById('color-stop-scan-btn'),
-            },
-
-            // --- Bluetooth Mode ---
-            bluetooth: {
-                sendView: document.getElementById('bluetooth-send-view'),
-                recvView: document.getElementById('bluetooth-recv-view'),
-                sendText: document.getElementById('bluetooth-send-text'),
-                sendBtn: document.getElementById('bluetooth-send-btn'),
-
-            },
 
             // --- Receiver View ---
             recv: {
@@ -228,12 +225,21 @@ class App {
                 downloadBtn: document.getElementById('download-btn'),
             },
 
-            // --- Scanner Modal ---
+            // --- Modals ---
             modal: {
                 qrModal: document.getElementById('qr-scanner-modal'),
                 qrCloseBtn: document.getElementById('qr-scanner-close-btn'),
                 qrVideo: document.getElementById('qr-scanner-video'),
                 qrStatus: document.getElementById('qr-scanner-status'),
+                // NFC Tap Modal
+                nfcModal: document.getElementById('nfc-tap-modal'),
+                nfcCloseBtn: document.getElementById('nfc-modal-close-btn'),
+                nfcCancelBtn: document.getElementById('nfc-modal-cancel-btn'),
+                nfcTitle: document.getElementById('nfc-modal-title'),
+                nfcDesc: document.getElementById('nfc-modal-desc'),
+                nfcPayloadText: document.getElementById('nfc-modal-payload-text'),
+                nfcStatus: document.getElementById('nfc-modal-status'),
+                nfcIcon: document.getElementById('nfc-modal-icon'),
             },
 
             toast: document.getElementById('toast-container'),
@@ -268,28 +274,17 @@ class App {
             });
         });
 
-        document.querySelectorAll('[data-audio-mode]').forEach(btn => {
+        document.querySelectorAll('[data-nfc-mode]').forEach(btn => {
             btn.addEventListener('click', () => {
-                document.querySelectorAll('[data-audio-mode]').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('[data-nfc-mode]').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
-                if (btn.dataset.audioMode === 'send') {
-                    this.dom.audio.sendView.classList.remove('hidden'); this.dom.audio.recvView.classList.add('hidden');
-                    window.audioEngine.stopListening();
+                if (btn.dataset.nfcMode === 'send') {
+                    this.dom.nfc.sendView.classList.remove('hidden');
+                    this.dom.nfc.recvView.classList.add('hidden');
+                    this._stopNFCScan();
                 } else {
-                    this.dom.audio.sendView.classList.add('hidden'); this.dom.audio.recvView.classList.remove('hidden');
-                }
-            });
-        });
-
-        document.querySelectorAll('[data-color-mode]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('[data-color-mode]').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                if (btn.dataset.colorMode === 'send') {
-                    this.dom.color.sendView.classList.remove('hidden'); this.dom.color.recvView.classList.add('hidden');
-                    window.colorStreamEngine.stopReceiving();
-                } else {
-                    this.dom.color.sendView.classList.add('hidden'); this.dom.color.recvView.classList.remove('hidden');
+                    this.dom.nfc.sendView.classList.add('hidden');
+                    this.dom.nfc.recvView.classList.remove('hidden');
                 }
             });
         });
@@ -299,10 +294,6 @@ class App {
         this.dom.url.encryptToggle.addEventListener('change', (e) => {
             this.dom.url.passwordGroup.classList.toggle('hidden', !e.target.checked);
             if (e.target.checked) this.dom.url.password.focus();
-        });
-        this.dom.url.advToggle.addEventListener('click', () => {
-            this.dom.url.advPanel.classList.toggle('hidden');
-            this.dom.url.advToggle.classList.toggle('open');
         });
         this.dom.url.generateBtn.addEventListener('click', () => this._generateURLLink());
         this.dom.url.copyBtn.addEventListener('click', () => this._copyToClipboard(this.dom.url.shareUrl.value));
@@ -339,6 +330,8 @@ class App {
                 }
             });
         });
+        this.dom.p2p.scanNfcBtn?.addEventListener('click', () => this._startP2PNFCJoin());
+        this.dom.p2p.nfcShareBtn?.addEventListener('click', () => this._startP2PNFCShare());
         this.dom.p2p.startSendBtn.addEventListener('click', () => this._startP2PSend());
         this.dom.p2p.sendCopyBtn?.addEventListener('click', () => this._copyToClipboard(this.dom.p2p.sendUrl.value));
         this.dom.p2p.topRoomCode?.addEventListener('click', () => {
@@ -375,62 +368,41 @@ class App {
         this.dom.qrs.stopBtn.addEventListener('click', () => this._stopQRStream());
         this.dom.qrs.recvDownloadBtn?.addEventListener('click', () => this._downloadBlob(this.receivedBlob, this.receivedHeader?.filename));
 
-        // ---- Audio Mode ----
-        this.dom.audio.sendText.addEventListener('input', () => {
-            this.dom.audio.sendBtn.disabled = !this.dom.audio.sendText.value.trim();
-        });
-        this.dom.audio.encryptToggle.addEventListener('change', (e) => {
-            this.dom.audio.passwordGroup.classList.toggle('hidden', !e.target.checked);
-        });
-        this.dom.audio.sendBtn.addEventListener('click', () => this._audioTransmit());
-        this.dom.audio.startListenBtn.addEventListener('click', () => this._audioStartListen());
-        this.dom.audio.stopListenBtn.addEventListener('click', () => this._audioStopListen());
+        // ---- NFC Mode ----
+        this._checkNFCCompatibility();
 
-        // ---- Color Mode ----
-        this.dom.color.encryptToggle.addEventListener('change', (e) => {
-            this.dom.color.passwordGroup.classList.toggle('hidden', !e.target.checked);
-        });
-        this.dom.color.sendBtn.addEventListener('click', () => this._colorStartTransmit());
-        this.dom.color.stopBtn.addEventListener('click', () => this._colorStopTransmit());
-        this.dom.color.startScanBtn.addEventListener('click', () => this._colorStartScan());
-        this.dom.color.stopScanBtn.addEventListener('click', () => this._colorStopScan());
-
-        // ---- Bluetooth Mode ----
-        document.querySelectorAll('[data-bluetooth-mode]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('[data-bluetooth-mode]').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                if (btn.dataset.bluetoothMode === 'send') {
-                    this.dom.bluetooth.sendView.classList.remove('hidden'); this.dom.bluetooth.recvView.classList.add('hidden');
-                } else {
-                    this.dom.bluetooth.sendView.classList.add('hidden'); this.dom.bluetooth.recvView.classList.remove('hidden');
-                }
-            });
+        this.dom.nfc.typeBtns?.forEach(btn => {
+            btn.addEventListener('click', () => this._switchNFCPayloadType(btn.dataset.nfcType));
         });
 
-        this.dom.bluetooth.sendText.addEventListener('input', () => {
-            this.dom.bluetooth.sendBtn.disabled = !this.dom.bluetooth.sendText.value.trim();
+        this.dom.nfc.sendText?.addEventListener('input', () => this._updateNFCTextCapacity());
+
+        this.dom.nfc.encryptToggle?.addEventListener('change', (e) => {
+            this.dom.nfc.passwordGroup.classList.toggle('hidden', !e.target.checked);
+            if (e.target.checked) this.dom.nfc.password.focus();
         });
 
-        this.dom.bluetooth.sendBtn.addEventListener('click', async () => {
-            const text = this.dom.bluetooth.sendText.value.trim();
-            if (!text) return;
-            
-            this.dom.bluetooth.sendBtn.disabled = true;
-            this.dom.bluetooth.sendBtn.textContent = 'Connecting...';
-            
-            window.bluetoothEngine.onStatus = (msg) => this._showToast(msg, 'info');
-            window.bluetoothEngine.onError = (err) => {
-                this._showToast(err, 'error');
-                this.dom.bluetooth.sendBtn.disabled = false;
-                this.dom.bluetooth.sendBtn.textContent = 'Scan & Connect to Peer';
-            };
-            
-            await window.bluetoothEngine.connectAndSend(text);
-            
-            this.dom.bluetooth.sendBtn.disabled = false;
-            this.dom.bluetooth.sendBtn.textContent = 'Scan & Connect to Peer';
+        this.dom.nfc.insertP2PUrlBtn?.addEventListener('click', () => {
+            const currentRoom = (this.activeRoomId || window.p2pEngine.peerId || '').toUpperCase();
+            if (currentRoom) {
+                const roomUrl = `${location.origin}${location.pathname}#P2P_RECV|${currentRoom}`;
+                this.dom.nfc.sendUrl.value = roomUrl;
+                this._showToast('Lien du salon P2P inséré !', 'success');
+            } else {
+                this._showToast('Salon P2P en cours d\'initialisation...', 'info');
+            }
         });
+
+        this._setupDropZone(this.dom.nfc.dropZone, this.dom.nfc.fileInput, (file) => this._onFileSelectedNFC(file));
+
+        this.dom.nfc.writeBtn?.addEventListener('click', () => this._startNFCWrite());
+        this.dom.nfc.startScanBtn?.addEventListener('click', () => this._startNFCScan());
+        this.dom.nfc.stopScanBtn?.addEventListener('click', () => this._stopNFCScan());
+        this.dom.nfc.clearHistoryBtn?.addEventListener('click', () => this._clearNFCHistory());
+
+        // NFC Modal events
+        this.dom.modal.nfcCloseBtn?.addEventListener('click', () => this._closeNFCTapModal());
+        this.dom.modal.nfcCancelBtn?.addEventListener('click', () => this._closeNFCTapModal());
 
         // ---- Receiver View ----
         this.dom.recv.downloadBtn.addEventListener('click', () => this._downloadBlob(this.receivedBlob, this.receivedHeader?.filename));
@@ -597,16 +569,6 @@ class App {
                 encrypted: this.dom.url.encryptToggle.checked,
             };
 
-            const vibeVal = this.dom.url.vibe.value;
-            if (vibeVal !== 'default') header.vibe = vibeVal;
-
-            const expiryMin = parseInt(this.dom.url.timebomb.value);
-            if (expiryMin > 0) header.expiry = Features.getExpiryTimestamp(expiryMin);
-
-            if (this.dom.url.geoToggle.checked) {
-                this._setURLProgress(true, 'Getting location...');
-                header.geo = await Features.getCurrentPosition();
-            }
 
             let payloadBase64;
 
@@ -994,12 +956,38 @@ class App {
 
             const chip = document.createElement('div');
             chip.className = `peer-chip${isSelf ? ' is-self' : ''}${isHost ? ' is-host' : ''}`;
+
+            let topologyBadge = '';
+            let latencyBadge = '';
+            if (!isSelf) {
+                const stats = window.p2pEngine.getPeerStats(id);
+                if (stats) {
+                    if (stats.isRelay) {
+                        topologyBadge = `<span class="peer-topology-badge relay" title="Connexion relayée par TURN (traverse 4G/5G CGNAT, Wi-Fi d'entreprise et pare-feu)">🔄 TURN</span>`;
+                    } else if (stats.type === 'host') {
+                        topologyBadge = `<span class="peer-topology-badge direct-lan" title="Connexion ultra-rapide sur réseau local (même Wi-Fi ou câble Ethernet)">⚡ LAN</span>`;
+                    } else if (stats.type === 'srflx') {
+                        topologyBadge = `<span class="peer-topology-badge direct-stun" title="Connexion directe P2P hole-punching (STUN)">🌐 Direct</span>`;
+                    } else {
+                        topologyBadge = `<span class="peer-topology-badge connecting" title="Négociation du lien réseau...">⏳ ...</span>`;
+                    }
+
+                    if (typeof stats.rtt === 'number' && stats.rtt > 0) {
+                        latencyBadge = `<span class="peer-latency-badge" title="Latence aller-retour">${stats.rtt}ms</span>`;
+                    }
+                }
+            } else {
+                topologyBadge = `<span class="peer-topology-badge self-badge" title="Votre appareil">Local</span>`;
+            }
+
             chip.title = `${persona.fullName} [${id}]${badgeText ? ` • ${badgeText}` : ''}`;
             chip.innerHTML = `
                 <span class="peer-emoji">${persona.emoji}</span>
                 <span class="peer-name">${persona.name}</span>
                 <span class="peer-id-code">${id}</span>
                 ${badgeText ? `<span class="peer-badge">${badgeText}</span>` : ''}
+                ${topologyBadge}
+                ${latencyBadge}
             `;
             this.dom.p2p.peersList.appendChild(chip);
         });
@@ -1057,6 +1045,13 @@ class App {
             }
             this._updateP2PConnectionUI();
             this._showToast(`${peerPersona.fullName} a quitté le salon.`, 'info');
+        });
+
+        window.p2pEngine.on('topology', (peerId, stats) => {
+            // Live update peer topology badge & latency
+            const currentRoom = (this.activeRoomId || window.p2pEngine.peerId || '').toUpperCase();
+            const peers = window.p2pEngine.getConnectedPeers();
+            this._renderConnectedPeersList(currentRoom, peers);
         });
 
         window.p2pEngine.on('message', (peerId, data) => {
@@ -1687,165 +1682,477 @@ class App {
     }
 
     // ============================================================
-    // AUDIO MODE
+    // NFC MODE (Tap to Share, Messages, URLs, Files, P2P Bridge)
     // ============================================================
 
-    async _audioTransmit() {
-        let text = this.dom.audio.sendText.value.trim();
-        if (!text) return;
-
-        this.dom.audio.sendBtn.disabled = true;
-        this.dom.audio.sendBtn.textContent = 'Transmitting...';
-        this.dom.audio.sendStatus.classList.remove('hidden');
-        this.dom.audio.sendStatus.textContent = 'Initializing ggwave...';
-
-        try {
-            // Encrypt text if enabled
-            if (this.dom.audio.encryptToggle.checked) {
-                const pw = this.dom.audio.password.value;
-                if (!pw) { this._showToast('Password required', 'error'); return; }
-                this.dom.audio.sendStatus.textContent = 'Encrypting...';
-                const blob = new Blob([new TextEncoder().encode(text)]);
-                const enc = await Crypto.encryptBlob(blob, pw);
-                const encB64 = await Compress.blobToBase64(enc.blob);
-                // Prefix with encryption marker so receiver can detect and decrypt
-                text = `AENC|${enc.salt}|${enc.iv}|${encB64}`;
-            }
-
-            const protocol = this.dom.audio.protocol.value;
-            this.dom.audio.sendStatus.textContent = `Transmitting via ${protocol}...`;
-            await window.audioEngine.transmit(text, protocol);
-            this.dom.audio.sendStatus.textContent = '✅ Transmission complete!';
-            this.dom.audio.sendStatus.className = 'status-msg success';
-            this._showToast('Audio transmitted!', 'success');
-        } catch (err) {
-            console.error('Audio transmit error:', err);
-            this.dom.audio.sendStatus.textContent = '❌ ' + err.message;
-            this.dom.audio.sendStatus.className = 'status-msg error';
-            this._showToast('Audio error: ' + err.message, 'error');
-        } finally {
-            this.dom.audio.sendBtn.disabled = false;
-            this.dom.audio.sendBtn.textContent = 'Transmit via Sound';
+    _checkNFCCompatibility() {
+        if (!window.nfcEngine.isSupported()) {
+            this.dom.nfc.compatBanner?.classList.remove('hidden');
+        } else {
+            this.dom.nfc.compatBanner?.classList.add('hidden');
         }
     }
 
-    async _audioStartListen() {
-        this.dom.audio.startListenBtn.classList.add('hidden');
-        this.dom.audio.stopListenBtn.classList.remove('hidden');
-        this.dom.audio.recvOutput.textContent = 'Listening...';
+    _switchNFCPayloadType(type) {
+        this.activeNFCType = type;
+        this.dom.nfc.typeBtns?.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.nfcType === type);
+        });
+
+        this.dom.nfc.panelText?.classList.toggle('hidden', type !== 'text');
+        this.dom.nfc.panelUrl?.classList.toggle('hidden', type !== 'url');
+        this.dom.nfc.panelFile?.classList.toggle('hidden', type !== 'file');
+
+        if (this.dom.nfc.writeBtnText) {
+            if (type === 'text') this.dom.nfc.writeBtnText.textContent = 'Écrire le Message sur NFC (Approcher un tag)';
+            else if (type === 'url') this.dom.nfc.writeBtnText.textContent = 'Écrire l\'URL sur NFC (Approcher un tag)';
+            else if (type === 'file') this.dom.nfc.writeBtnText.textContent = 'Partager le Fichier via NFC (Approcher un tag)';
+        }
+    }
+
+    _updateNFCTextCapacity() {
+        const text = this.dom.nfc.sendText?.value || '';
+        const bytes = new TextEncoder().encode(text).length;
+        if (this.dom.nfc.textCapacityLabel) {
+            this.dom.nfc.textCapacityLabel.textContent = `Taille : ${bytes} octets`;
+            if (bytes > 888) {
+                this.dom.nfc.textCapacityLabel.style.color = 'var(--accent-red)';
+            } else if (bytes > 500) {
+                this.dom.nfc.textCapacityLabel.style.color = '#f59e0b';
+            } else {
+                this.dom.nfc.textCapacityLabel.style.color = 'var(--accent-cyan)';
+            }
+        }
+    }
+
+    _onFileSelectedNFC(file) {
+        if (!file) return;
+        this.selectedNFCFile = file;
+
+        if (this.dom.nfc.filename) this.dom.nfc.filename.textContent = file.name;
+        if (this.dom.nfc.filesize) this.dom.nfc.filesize.textContent = this._formatSize(file.size);
+        this.dom.nfc.fileDetails?.classList.remove('hidden');
+        this.dom.nfc.strategyCard?.classList.remove('hidden');
+
+        if (file.size <= 2048) {
+            if (this.dom.nfc.strategyBadge) {
+                this.dom.nfc.strategyBadge.className = 'strategy-badge';
+                this.dom.nfc.strategyBadge.textContent = 'Mode Direct NFC (MIME)';
+            }
+            if (this.dom.nfc.strategyDesc) {
+                this.dom.nfc.strategyDesc.textContent = `Ce fichier (${this._formatSize(file.size)}) sera stocké directement dans la mémoire du badge NFC.`;
+            }
+        } else {
+            if (this.dom.nfc.strategyBadge) {
+                this.dom.nfc.strategyBadge.className = 'strategy-badge beam';
+                this.dom.nfc.strategyBadge.textContent = 'Mode P2P Beam Handshake';
+            }
+            if (this.dom.nfc.strategyDesc) {
+                this.dom.nfc.strategyDesc.textContent = `Ce fichier (${this._formatSize(file.size)}) dépasse la mémoire d'un tag. Le tag servira de clé NFC pour lancer le téléchargement P2P Beam ultra-rapide sans limite de taille !`;
+            }
+        }
+    }
+
+    async _startNFCWrite() {
+        if (!window.nfcEngine.isSupported()) {
+            this._showToast('Web NFC nécessite Android (Chrome/Edge/Opera via HTTPS).', 'error');
+            return;
+        }
+
+        const type = this.activeNFCType;
+        let payloadPreview = '';
+
+        if (type === 'text') {
+            const text = this.dom.nfc.sendText.value.trim();
+            if (!text) { this._showToast('Veuillez entrer un message texte.', 'error'); return; }
+            if (this.dom.nfc.encryptToggle.checked && !this.dom.nfc.password.value) {
+                this._showToast('Veuillez entrer un mot de passe de chiffrement.', 'error');
+                return;
+            }
+            payloadPreview = text.length > 35 ? text.substring(0, 35) + '...' : text;
+        } else if (type === 'url') {
+            const url = this.dom.nfc.sendUrl.value.trim();
+            if (!url) { this._showToast('Veuillez entrer une URL.', 'error'); return; }
+            payloadPreview = url;
+        } else if (type === 'file') {
+            if (!this.selectedNFCFile) { this._showToast('Veuillez choisir un fichier.', 'error'); return; }
+            payloadPreview = `${this.selectedNFCFile.name} (${this._formatSize(this.selectedNFCFile.size)})`;
+        }
+
+        this._openNFCTapModal({
+            title: 'Écrire sur NFC',
+            desc: 'Approchez le dos de votre smartphone du badge ou de l\'appareil récepteur...',
+            payloadText: payloadPreview,
+            icon: '📲',
+            statusText: 'Prêt à écrire. Maintenez le contact...'
+        });
 
         try {
-            await window.audioEngine.startListening(
-                (decoded) => {
-                    const line = document.createElement('div');
-                    line.textContent = `[${new Date().toLocaleTimeString()}] ${decoded}`;
-                    this.dom.audio.recvOutput.appendChild(line);
-                    this.dom.audio.recvOutput.scrollTop = this.dom.audio.recvOutput.scrollHeight;
-                    this._showToast('Audio data received!', 'success');
-                },
-                (spectrum) => {
-                    this._drawSpectrum(this.dom.audio.recvCanvas, spectrum);
+            if (type === 'text') {
+                const text = this.dom.nfc.sendText.value.trim();
+                const encrypt = this.dom.nfc.encryptToggle.checked;
+                const password = this.dom.nfc.password.value;
+                await window.nfcEngine.writeText(text, { encrypt, password });
+            } else if (type === 'url') {
+                const url = this.dom.nfc.sendUrl.value.trim();
+                await window.nfcEngine.writeUrl(url);
+            } else if (type === 'file') {
+                const file = this.selectedNFCFile;
+                if (file.size <= 2048) {
+                    await window.nfcEngine.writeFile(file, { mode: 'direct' });
+                } else {
+                    const roomId = (this.activeRoomId || window.p2pEngine.peerId || '').toUpperCase();
+                    const roomUrl = `${location.origin}${location.pathname}#P2P_RECV|${roomId}`;
+                    if (!this.selectedP2PFiles.some(f => f.name === file.name && f.size === file.size)) {
+                        this.selectedP2PFiles.push(file);
+                        this._renderP2PFileChips();
+                        this.dom.p2p.sendOptions?.classList.remove('hidden');
+                    }
+                    await window.nfcEngine.writeFile(file, { mode: 'beam', beamUrl: roomUrl });
                 }
-            );
-        } catch (err) {
-            this._showToast('Microphone error: ' + err.message, 'error');
-            this._audioStopListen();
-        }
-    }
-
-    _audioStopListen() {
-        window.audioEngine.stopListening();
-        this.dom.audio.startListenBtn.classList.remove('hidden');
-        this.dom.audio.stopListenBtn.classList.add('hidden');
-    }
-
-    // ============================================================
-    // COLOR STREAM MODE
-    // ============================================================
-
-    async _colorStartTransmit() {
-        let text = this.dom.color.sendText.value.trim();
-        if (!text) { this._showToast('Enter text to transmit', 'error'); return; }
-
-        // Encrypt text if enabled
-        if (this.dom.color.encryptToggle.checked) {
-            const pw = this.dom.color.password.value;
-            if (!pw) { this._showToast('Password required', 'error'); return; }
-            const blob = new Blob([new TextEncoder().encode(text)]);
-            const enc = await Crypto.encryptBlob(blob, pw);
-            const encB64 = await Compress.blobToBase64(enc.blob);
-            text = `CENC|${enc.salt}|${enc.iv}|${encB64}`;
-        }
-
-        const frames = window.colorStreamEngine.encodeText(text);
-        const intervalMs = parseInt(this.dom.color.speed.value);
-
-        this.dom.color.sendBtn.classList.add('hidden');
-        this.dom.color.stopBtn.classList.remove('hidden');
-
-        window.colorStreamEngine.startTransmitting(this.dom.color.sendCanvas, frames, intervalMs);
-    }
-
-    _colorStopTransmit() {
-        window.colorStreamEngine.stopTransmitting();
-        this.dom.color.sendBtn.classList.remove('hidden');
-        this.dom.color.stopBtn.classList.add('hidden');
-    }
-
-    async _colorStartScan() {
-        this.dom.color.startScanBtn.classList.add('hidden');
-        this.dom.color.stopScanBtn.classList.remove('hidden');
-        this.dom.color.recvOutput.textContent = 'Starting camera...';
-
-        await window.colorStreamEngine.startReceiving(this.dom.color.cameraVideo, {
-            onData: (text) => {
-                this.dom.color.recvOutput.textContent += `\n✅ Received: ${text}`;
-                this._showToast('Color data received!', 'success');
-            },
-            onStatus: (msg) => {
-                this.dom.color.recvOutput.textContent = msg;
-            },
-            onError: (err) => {
-                this._showToast('Camera error: ' + err.message, 'error');
-                this._colorStopScan();
             }
+
+            this._updateNFCTapModalStatus('✅ Données écrites avec succès sur le tag NFC !', 'success');
+            this._showToast('Écriture NFC réussie !', 'success');
+            setTimeout(() => this._closeNFCTapModal(), 1500);
+
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                this._updateNFCTapModalStatus('❌ Erreur d\'écriture : ' + err.message, 'error');
+                this._showToast('Erreur NFC: ' + err.message, 'error');
+            }
+        }
+    }
+
+    async _startNFCScan() {
+        if (!window.nfcEngine.isSupported()) {
+            this._showToast('Web NFC nécessite Android (Chrome/Edge/Opera via HTTPS).', 'error');
+            return;
+        }
+
+        this.dom.nfc.startScanBtn?.classList.add('hidden');
+        this.dom.nfc.stopScanBtn?.classList.remove('hidden');
+        if (this.dom.nfc.recvStatusTitle) this.dom.nfc.recvStatusTitle.textContent = 'Lecteur NFC actif';
+        if (this.dom.nfc.recvStatusDesc) this.dom.nfc.recvStatusDesc.textContent = 'En attente d\'un tag ou d\'un appareil NFC... Approchez votre smartphone.';
+
+        try {
+            await window.nfcEngine.startScan({
+                onReading: (data) => this._onNFCReading(data),
+                onError: (err) => {
+                    this._showToast('Erreur lecture NFC: ' + err.message, 'error');
+                    this._stopNFCScan();
+                },
+                onReadingError: () => {
+                    this._showToast('Erreur de lecture du tag NFC (essayez de réapprocher l\'appareil)', 'error');
+                }
+            });
+            this._showToast('Lecteur NFC démarré', 'info');
+        } catch (err) {
+            this._stopNFCScan();
+        }
+    }
+
+    _stopNFCScan() {
+        window.nfcEngine.stopScan();
+        this.dom.nfc.startScanBtn?.classList.remove('hidden');
+        this.dom.nfc.stopScanBtn?.classList.add('hidden');
+        if (this.dom.nfc.recvStatusTitle) this.dom.nfc.recvStatusTitle.textContent = 'Lecteur NFC en attente';
+        if (this.dom.nfc.recvStatusDesc) this.dom.nfc.recvStatusDesc.textContent = 'Cliquez sur Démarrer pour écouter les tags et appareils NFC à proximité.';
+    }
+
+    _onNFCReading(data) {
+        this._showToast('Données reçues via NFC !', 'success');
+        this.nfcHistory.unshift({
+            id: 'nfc_' + Date.now(),
+            serialNumber: data.serialNumber,
+            timestamp: new Date().toLocaleTimeString(),
+            records: data.records
+        });
+
+        this._renderNFCRecords();
+    }
+
+    _renderNFCRecords() {
+        const container = this.dom.nfc.cardsList;
+        if (!container) return;
+
+        if (this.nfcHistory.length === 0) {
+            this.dom.nfc.historySection?.classList.add('hidden');
+            container.innerHTML = '';
+            return;
+        }
+
+        this.dom.nfc.historySection?.classList.remove('hidden');
+        if (this.dom.nfc.recordsCount) this.dom.nfc.recordsCount.textContent = this.nfcHistory.length;
+
+        container.innerHTML = '';
+
+        this.nfcHistory.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'nfc-record-card';
+
+            let recordsHtml = '';
+            item.records.forEach((rec, idx) => {
+                if (rec.recordType === 'url') {
+                    const isP2P = rec.url.includes('#P2P_RECV|') || rec.url.includes('#BEAM|');
+                    recordsHtml += `
+                        <div style="margin-top:0.4rem;">
+                            <span class="record-badge">🔗 URL NDEF</span>
+                            <div class="record-body" style="margin-top:0.3rem;">
+                                <a href="${rec.url}" target="_blank" rel="noopener" style="color:var(--accent-cyan); text-decoration:underline;">${rec.url}</a>
+                            </div>
+                            <div class="record-actions" style="margin-top:0.5rem;">
+                                <button class="btn secondary small nfc-copy-url-btn" data-url="${encodeURIComponent(rec.url)}">📋 Copier</button>
+                                <a href="${rec.url}" target="_blank" rel="noopener" class="btn primary small">↗ Ouvrir</a>
+                                ${isP2P ? `<button class="btn primary small nfc-join-p2p-btn" data-url="${encodeURIComponent(rec.url)}">⚡ Rejoindre le Salon P2P</button>` : ''}
+                            </div>
+                        </div>
+                    `;
+                } else if (rec.recordType === 'text') {
+                    const isEncrypted = rec.isEncrypted;
+                    recordsHtml += `
+                        <div style="margin-top:0.4rem;">
+                            <span class="record-badge">${isEncrypted ? '🔒 Message Chiffré' : '📝 Texte'}</span>
+                            <div class="record-body" id="nfc-text-${item.id}-${idx}" style="margin-top:0.3rem;">${isEncrypted ? 'Contenu chiffré (AES-256-GCM)' : rec.text}</div>
+                            <div class="record-actions" style="margin-top:0.5rem;">
+                                <button class="btn secondary small nfc-copy-text-btn" data-text="${encodeURIComponent(rec.text)}">📋 Copier</button>
+                                ${isEncrypted ? `<button class="btn primary small nfc-decrypt-btn" data-item-id="${item.id}" data-rec-idx="${idx}">🔓 Déchiffrer</button>` : ''}
+                            </div>
+                        </div>
+                    `;
+                } else if (rec.recordType === 'mime') {
+                    const isJsonMeta = rec.json && rec.json.aether === 'nfc-file';
+                    if (isJsonMeta) {
+                        recordsHtml += `
+                            <div style="margin-top:0.4rem;">
+                                <span class="record-badge">📁 Métadonnées Fichier</span>
+                                <div class="record-body" style="margin-top:0.3rem;">
+                                    <strong>${rec.json.name}</strong> (${this._formatSize(rec.json.size)}) • ${rec.json.type || 'Fichier binaire'}
+                                </div>
+                            </div>
+                        `;
+                    } else if (rec.blob) {
+                        const fileBlob = rec.blob;
+                        recordsHtml += `
+                            <div style="margin-top:0.4rem;">
+                                <span class="record-badge">📦 Fichier Binaire (MIME)</span>
+                                <div class="record-body" style="margin-top:0.3rem;">
+                                    Taille: ${this._formatSize(rec.bytes || fileBlob.size)} • Type: ${rec.mediaType || 'application/octet-stream'}
+                                </div>
+                                <div class="record-actions" style="margin-top:0.5rem;">
+                                    <button class="btn primary small nfc-download-blob-btn" data-item-id="${item.id}" data-rec-idx="${idx}">📥 Télécharger le Fichier</button>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+            });
+
+            card.innerHTML = `
+                <div class="record-header">
+                    <span style="font-size:0.75rem; color:var(--text-muted);">Tag UID: <code>${item.serialNumber}</code></span>
+                    <span class="record-time">${item.timestamp}</span>
+                </div>
+                ${recordsHtml}
+            `;
+
+            container.appendChild(card);
+        });
+
+        // Bind card actions
+        container.querySelectorAll('.nfc-copy-url-btn').forEach(btn => {
+            btn.onclick = () => this._copyToClipboard(decodeURIComponent(btn.dataset.url));
+        });
+        container.querySelectorAll('.nfc-copy-text-btn').forEach(btn => {
+            btn.onclick = () => this._copyToClipboard(decodeURIComponent(btn.dataset.text));
+        });
+        container.querySelectorAll('.nfc-join-p2p-btn').forEach(btn => {
+            btn.onclick = () => {
+                const url = decodeURIComponent(btn.dataset.url);
+                const peerId = this._parsePeerIdFromScanned(url);
+                if (peerId) {
+                    this._switchTab('tab-p2p');
+                    this.dom.p2p.remotePeerInput.value = peerId;
+                    this._connectP2PToPeer(peerId);
+                }
+            };
+        });
+        container.querySelectorAll('.nfc-decrypt-btn').forEach(btn => {
+            btn.onclick = () => {
+                const itemId = btn.dataset.itemId;
+                const recIdx = parseInt(btn.dataset.recIdx);
+                const item = this.nfcHistory.find(h => h.id === itemId);
+                if (!item || !item.records[recIdx]) return;
+                const rec = item.records[recIdx];
+                const pw = prompt('Entrez le mot de passe pour déchiffrer le message :');
+                if (!pw) return;
+                try {
+                    const parts = rec.text.split('|');
+                    Crypto.decryptBase64(parts[3], pw, parts[1], parts[2]).then(async blob => {
+                        const original = await blob.text();
+                        const display = document.getElementById(`nfc-text-${itemId}-${recIdx}`);
+                        if (display) display.textContent = original;
+                        this._showToast('Message déchiffré avec succès !', 'success');
+                    }).catch(err => {
+                        this._showToast('Échec du déchiffrement — mauvais mot de passe ?', 'error');
+                    });
+                } catch (e) {
+                    this._showToast('Format de chiffrement invalide.', 'error');
+                }
+            };
+        });
+        container.querySelectorAll('.nfc-download-blob-btn').forEach(btn => {
+            btn.onclick = () => {
+                const itemId = btn.dataset.itemId;
+                const recIdx = parseInt(btn.dataset.recIdx);
+                const item = this.nfcHistory.find(h => h.id === itemId);
+                if (!item || !item.records[recIdx]) return;
+                const rec = item.records[recIdx];
+                // Check if companion meta exists
+                const metaRec = item.records.find(r => r.json && r.json.aether === 'nfc-file');
+                const filename = metaRec ? metaRec.json.name : `nfc_fichier_${Date.now()}`;
+                this._downloadBlob(rec.blob, filename);
+                this._showToast(`Téléchargement de ${filename}...`, 'success');
+            };
         });
     }
 
-    _colorStopScan() {
-        window.colorStreamEngine.stopReceiving();
-        this.dom.color.startScanBtn.classList.remove('hidden');
-        this.dom.color.stopScanBtn.classList.add('hidden');
+    _clearNFCHistory() {
+        this.nfcHistory = [];
+        this._renderNFCRecords();
+        this._showToast('Historique NFC effacé', 'info');
     }
 
-    // ============================================================
-    // UTILITIES
-    // ============================================================
+    // ---- P2P Tap-to-Share and Tap-to-Join ----
 
-    _drawSpectrum(canvas, dataArray) {
-        const ctx = canvas.getContext('2d');
-        const width = canvas.width;
-        const height = canvas.height;
-
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, width, height);
-
-        const barWidth = (width / dataArray.length) * 2.5;
-        let x = 0;
-
-        for (let i = 0; i < dataArray.length; i++) {
-            const v = dataArray[i] / 255;
-            const barHeight = v * height;
-
-            // Gradient from cyan to purple based on frequency
-            const r = Math.floor(v * 168);
-            const g = Math.floor(v * 229 * (1 - i / dataArray.length));
-            const b = Math.floor(200 + v * 55);
-
-            ctx.fillStyle = `rgb(${r},${g},${b})`;
-            ctx.fillRect(x, height - barHeight, barWidth, barHeight);
-            x += barWidth + 1;
+    async _startP2PNFCShare() {
+        if (!window.nfcEngine.isSupported()) {
+            this._showToast('Web NFC nécessite Android (Chrome/Edge/Opera via HTTPS). Utilisez le QR Code !', 'info');
+            this.dom.p2p.qrCollapsible?.classList.remove('hidden');
+            return;
         }
+
+        const roomId = (this.activeRoomId || window.p2pEngine.peerId || '').toUpperCase();
+        if (!roomId) {
+            this._showToast('Initialisation du salon P2P en cours...', 'info');
+            return;
+        }
+
+        const roomUrl = `${location.origin}${location.pathname}#P2P_RECV|${roomId}`;
+        const persona = this._getAnimalPersona(roomId);
+
+        this._openNFCTapModal({
+            title: 'Tap to Share (NFC)',
+            desc: 'Approchez le dos d\'un autre smartphone ou d\'un badge NFC pour transmettre le salon P2P instantanément !',
+            payloadText: `Salon ${roomId} (${persona.fullName})`,
+            icon: persona.emoji || '🦊',
+            statusText: 'En attente du contact NFC...'
+        });
+
+        try {
+            await window.nfcEngine.writeP2PRoom(roomUrl, roomId);
+            this._updateNFCTapModalStatus('✅ Salon P2P partagé par NFC !', 'success');
+            this._showToast('Salon partagé via NFC avec succès !', 'success');
+            setTimeout(() => this._closeNFCTapModal(), 1500);
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                this._updateNFCTapModalStatus('❌ Erreur : ' + err.message, 'error');
+                this._showToast('Erreur NFC: ' + err.message, 'error');
+            }
+        }
+    }
+
+    async _startP2PNFCJoin() {
+        if (!window.nfcEngine.isSupported()) {
+            this._showToast('Web NFC nécessite Android (Chrome/Edge/Opera via HTTPS). Utilisez le scanner QR !', 'info');
+            this.dom.p2p.scanQrBtn?.click();
+            return;
+        }
+
+        this._openNFCTapModal({
+            title: 'Tap to Join (NFC)',
+            desc: 'Approchez votre smartphone de l\'appareil hôte ou d\'un badge NFC pour rejoindre le salon...',
+            payloadText: 'Écoute des signaux NFC...',
+            icon: '📡',
+            statusText: 'En attente de contact NFC...'
+        });
+
+        try {
+            await window.nfcEngine.startScan({
+                onReading: (data) => {
+                    let detectedPeerId = null;
+                    for (const rec of data.records) {
+                        if (rec.recordType === 'url' && rec.url) {
+                            const parsed = this._parsePeerIdFromScanned(rec.url);
+                            if (parsed) { detectedPeerId = parsed; break; }
+                        } else if (rec.recordType === 'text' && rec.text) {
+                            if (rec.text.startsWith('AETHER_P2P|')) {
+                                detectedPeerId = rec.text.split('|')[1].trim().toUpperCase();
+                                break;
+                            } else {
+                                const parsed = this._parsePeerIdFromScanned(rec.text);
+                                if (parsed) { detectedPeerId = parsed; break; }
+                            }
+                        }
+                    }
+
+                    if (detectedPeerId) {
+                        window.nfcEngine.stopScan();
+                        this._updateNFCTapModalStatus(`🎉 Salon ${detectedPeerId} détecté !`, 'success');
+                        this._showToast(`Salon ${detectedPeerId} détecté par NFC !`, 'success');
+                        this.dom.p2p.remotePeerInput.value = detectedPeerId;
+                        setTimeout(() => {
+                            this._closeNFCTapModal();
+                            this._connectP2PToPeer(detectedPeerId);
+                        }, 800);
+                    } else {
+                        this._updateNFCTapModalStatus('ℹ️ Tag NFC lu mais aucun salon P2P détecté', 'info');
+                    }
+                },
+                onError: (err) => {
+                    if (err.name !== 'AbortError') {
+                        this._updateNFCTapModalStatus('❌ Erreur : ' + err.message, 'error');
+                    }
+                }
+            });
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                this._updateNFCTapModalStatus('❌ Erreur : ' + err.message, 'error');
+            }
+        }
+    }
+
+    // ---- NFC Tap Modal Helpers ----
+
+    _openNFCTapModal({ title, desc, payloadText, icon, statusText }) {
+        const m = this.dom.modal;
+        if (!m.nfcModal) return;
+
+        if (m.nfcTitle) m.nfcTitle.textContent = title || 'Approchez votre appareil';
+        if (m.nfcDesc) m.nfcDesc.textContent = desc || 'Maintenez les appareils proches l\'un de l\'autre...';
+        if (m.nfcPayloadText) m.nfcPayloadText.textContent = payloadText || 'Données prêtes';
+        if (m.nfcIcon) m.nfcIcon.textContent = icon || '📲';
+        if (m.nfcStatus) {
+            m.nfcStatus.textContent = statusText || 'En attente de contact NFC...';
+            m.nfcStatus.className = 'status-msg info';
+        }
+
+        m.nfcModal.classList.remove('hidden');
+    }
+
+    _updateNFCTapModalStatus(text, type = 'info') {
+        const m = this.dom.modal;
+        if (m.nfcStatus) {
+            m.nfcStatus.textContent = text;
+            m.nfcStatus.className = `status-msg ${type}`;
+        }
+    }
+
+    _closeNFCTapModal() {
+        const m = this.dom.modal;
+        if (m.nfcModal) m.nfcModal.classList.add('hidden');
+        window.nfcEngine.cancelWrite();
+        window.nfcEngine.stopScan();
     }
 
     _downloadBlob(blob, filename = 'download') {

@@ -1,16 +1,14 @@
-const CACHE_NAME = 'aethershare-v1';
+const CACHE_NAME = 'aethershare-v6';
 const ASSETS = [
     './',
     './index.html',
     './style.css',
     './script.js',
+    './nfc.js',
     './features.js',
     './p2p.js',
     './qrstream.js',
-    './colorstream.js',
-    './bluetooth.js',
     './manifest.json',
-    './lib/ggwave.js',
     './lib/jsQR.min.js',
     './lib/peerjs.min.js',
     './lib/qrcode.min.js'

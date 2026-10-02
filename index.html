@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AetherShare | Serverless Omnishare</title>
 
-    <meta name="description" content="Share files without a server. URL, P2P, animated QR codes, audio waves, and color streams — all client-side.">
+    <meta name="description" content="Share files without a server. URL, P2P, NFC (Tap to Share), and QR Stream — all client-side.">
     <meta property="og:title" content="AetherShare — Serverless Omnishare">
     <meta property="og:description" content="Encrypted, serverless file sharing through every channel imaginable.">
     <meta property="og:type" content="website">
@@ -21,11 +21,15 @@
     <script src="lib/jsQR.min.js"></script>
     <script src="lib/jszip.min.js"></script>
 
-    <!-- ggwave (data-over-sound WASM) -->
-    <script src="lib/ggwave.js"></script>
-
-    <!-- PWA Manifest -->
-    <link rel="manifest" href="manifest.json">
+    <!-- PWA Manifest (Loaded dynamically when on HTTP/HTTPS to prevent origin 'null' CORS error on file://) -->
+    <script>
+        if (window.location.protocol.startsWith('http')) {
+            const manifestLink = document.createElement('link');
+            manifestLink.rel = 'manifest';
+            manifestLink.href = 'manifest.json';
+            document.head.appendChild(manifestLink);
+        }
+    </script>
 
     <!-- Styles -->
     <link rel="stylesheet" href="style.css">
@@ -58,31 +62,23 @@
         <!-- ============ SENDER VIEW ============ -->
         <div id="sender-view">
 
-            <!-- Tab Bar (P2P Beam is 1st) -->
+            <!-- Navigation Segmented Dock (4 Core Vectors) -->
             <nav class="tab-bar" id="tab-bar">
-                <button class="tab-btn active" data-tab="tab-p2p">
+                <button class="tab-btn active" data-tab="tab-p2p" title="Connexion directe P2P WebRTC multi-appareils">
                     <span class="tab-icon">📡</span>
-                    P2P Beam
+                    <span class="tab-name">P2P Beam</span>
                 </button>
-                <button class="tab-btn" data-tab="tab-url">
+                <button class="tab-btn" data-tab="tab-nfc" title="Partage sans contact physique par effleurement NFC">
+                    <span class="tab-icon">📲</span>
+                    <span class="tab-name">Web NFC</span>
+                </button>
+                <button class="tab-btn" data-tab="tab-url" title="Lien URL auto-porteur chiffré dans le hash">
                     <span class="tab-icon">🔗</span>
-                    URL
+                    <span class="tab-name">Lien URL</span>
                 </button>
-                <button class="tab-btn" data-tab="tab-qrstream">
+                <button class="tab-btn" data-tab="tab-qrstream" title="Diffusion optique animée pour environnement sans réseau">
                     <span class="tab-icon">🏁</span>
-                    QR Stream
-                </button>
-                <button class="tab-btn" data-tab="tab-audio">
-                    <span class="tab-icon">🔊</span>
-                    Audio
-                </button>
-                <button class="tab-btn" data-tab="tab-color">
-                    <span class="tab-icon">🌈</span>
-                    Color
-                </button>
-                <button class="tab-btn" data-tab="tab-bluetooth">
-                    <span class="tab-icon">📶</span>
-                    Bluetooth
+                    <span class="tab-name">QR Stream</span>
                 </button>
             </nav>
 
@@ -110,9 +106,16 @@
                             <button class="btn secondary small" id="p2p-toggle-qr-btn" title="Afficher/Masquer le QR code">
                                 📷 QR Code
                             </button>
+                            <button class="btn secondary small" id="p2p-nfc-share-btn" title="Partager le salon en approchant un appareil NFC (Tap to Share)">
+                                📲 Tap to Share (NFC)
+                            </button>
                         </div>
 
                         <p class="hero-status" id="p2p-recv-status">Initialisation du salon...</p>
+                        <div class="network-resilience-badge" id="p2p-network-resilience-badge" title="Réseau P2P Hybride : STUN direct + Relais TURN haute disponibilité pour 4G, 5G, Wi-Fi et pare-feux stricts">
+                            <span class="pulse-dot"></span>
+                            <span>Réseau Hybride : Wi-Fi · 4G · 5G · Ethernet (STUN + Relais TURN)</span>
+                        </div>
                         <p class="status-msg info hidden" id="p2p-recv-id-display"></p>
 
                         <!-- Collapsible QR & Share Link Section -->
@@ -145,6 +148,9 @@
                             <input type="text" id="p2p-remote-peer-input" placeholder="Entrer un code à 6 caractères..." autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="6">
                             <button id="p2p-scan-qr-btn" class="btn secondary" title="Scanner un QR Code avec la caméra">
                                 📷 Scanner QR
+                            </button>
+                            <button id="p2p-scan-nfc-btn" class="btn secondary" title="Rejoindre en approchant un appareil NFC (Tap to Join)">
+                                📲 Tap to Join (NFC)
                             </button>
                             <button id="p2p-connect-btn" class="btn primary">Rejoindre</button>
                         </div>
@@ -233,6 +239,141 @@
                     </div>
                 </div>
 
+                <!-- ======== TAB: Web NFC (Contactless Tap) ======== -->
+                <div class="tab-pane" id="tab-nfc">
+                    <!-- NFC Compatibility Banner -->
+                    <div id="nfc-compat-banner" class="nfc-notice hidden">
+                        <div class="notice-icon">ℹ️</div>
+                        <div class="notice-text">
+                            <strong>Information compatibilité Web NFC</strong>
+                            <p>L'API Web NFC fonctionne nativement sur les appareils <strong>Android</strong> (Chrome, Edge, Opera, Samsung Internet) avec le NFC activé dans les paramètres système. Sur cet appareil, vous pouvez pré-remplir les données ou utiliser les modes P2P et QR code.</p>
+                        </div>
+                    </div>
+
+                    <!-- NFC Mode Selector: Send (Write) vs Receive (Read) -->
+                    <div class="mode-selector">
+                        <button class="mode-btn active" data-nfc-mode="send">
+                            <span class="mode-icon">📲</span>
+                            <span class="mode-label">Écrire / Partager</span>
+                        </button>
+                        <button class="mode-btn" data-nfc-mode="receive">
+                            <span class="mode-icon">📡</span>
+                            <span class="mode-label">Lire / Scanner</span>
+                        </button>
+                    </div>
+
+                    <!-- NFC Send (Write) View -->
+                    <div id="nfc-send-view">
+                        <!-- Payload Type Switcher -->
+                        <div class="nfc-type-tabs">
+                            <button class="nfc-type-btn active" data-nfc-type="text">📝 Message / Texte</button>
+                            <button class="nfc-type-btn" data-nfc-type="url">🔗 URL / Lien</button>
+                            <button class="nfc-type-btn" data-nfc-type="file">📁 Fichier</button>
+                        </div>
+
+                        <!-- Type 1: Text Message -->
+                        <div class="nfc-payload-panel" id="nfc-panel-text">
+                            <div class="input-group">
+                                <textarea id="nfc-send-text" rows="3" placeholder="Entrez un texte, une note secrète, un mot de passe ou des identifiants à écrire sur le tag NFC..."></textarea>
+                            </div>
+                            <div class="nfc-capacity-bar">
+                                <span class="capacity-label" id="nfc-text-capacity-label">Taille : 0 octets</span>
+                                <span class="capacity-hint">Capacité typique : ~144 B (NTAG213), ~504 B (NTAG215), ~888 B (NTAG216)</span>
+                            </div>
+
+                            <label class="toggle-switch" style="margin-top:0.75rem;">
+                                <input type="checkbox" id="nfc-encrypt-toggle">
+                                <span class="slider"></span>
+                                <span class="label-text">Chiffrer le message (AES-256-GCM)</span>
+                            </label>
+                            <div class="input-group hidden" id="nfc-password-group" style="margin-top:0.5rem;">
+                                <input type="password" id="nfc-password" placeholder="Mot de passe de chiffrement">
+                            </div>
+                        </div>
+
+                        <!-- Type 2: URL -->
+                        <div class="nfc-payload-panel hidden" id="nfc-panel-url">
+                            <div class="input-group">
+                                <div class="url-input-container">
+                                    <span class="url-input-prefix">🔗</span>
+                                    <input type="url" id="nfc-send-url" placeholder="https://example.com ou collez une URL..." autocomplete="off" spellcheck="false">
+                                </div>
+                            </div>
+                            <p class="text-muted" style="font-size:0.82rem; margin-top:0.6rem; line-height: 1.4;">
+                                💡 Enregistrement NDEF URL standard : tout smartphone (Android ou iPhone) qui effleure le tag ouvrira automatiquement ce lien dans son navigateur !
+                            </p>
+                            <div style="margin-top:0.75rem;">
+                                <button type="button" class="btn secondary small" id="nfc-insert-p2p-url-btn">
+                                    🦊 Insérer le lien de mon salon P2P actuel
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Type 3: File -->
+                        <div class="nfc-payload-panel hidden" id="nfc-panel-file">
+                            <div class="drop-zone" id="drop-zone-nfc">
+                                <div class="icon-wrapper">
+                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                                </div>
+                                <p>Glissez un fichier ici ou cliquez pour choisir</p>
+                                <span class="text-muted" style="font-size:0.75rem;">(Petits fichiers stockés directement en NFC, gros fichiers transmis via P2P Beam)</span>
+                                <input type="file" id="file-input-nfc" hidden>
+                            </div>
+
+                            <div class="file-details hidden" id="nfc-file-details" style="margin-top:0.8rem;">
+                                <p class="filename" id="nfc-filename">Fichier</p>
+                                <p class="filesize" id="nfc-filesize">0 KB</p>
+                            </div>
+
+                            <!-- Strategy indicator -->
+                            <div class="nfc-strategy-card hidden" id="nfc-strategy-card" style="margin-top:0.8rem;">
+                                <div class="strategy-badge" id="nfc-strategy-badge">Mode Direct NFC</div>
+                                <p id="nfc-strategy-desc" style="font-size:0.82rem; margin-top:0.3rem; color:var(--text-muted);">
+                                    Le fichier est stocké directement sur le tag NFC (MIME).
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Write Action Button -->
+                        <div style="margin-top:1.2rem;">
+                            <button class="btn primary" id="nfc-write-btn" style="width:100%; display:flex; align-items:center; justify-content:center; gap:0.5rem;">
+                                <span class="btn-icon">📲</span>
+                                <span id="nfc-write-btn-text">Écrire sur NFC (Approcher un tag)</span>
+                            </button>
+                        </div>
+                        <p class="status-msg info hidden" id="nfc-write-status" style="margin-top:0.8rem;"></p>
+                    </div>
+
+                    <!-- NFC Receive (Scan) View -->
+                    <div class="hidden" id="nfc-recv-view">
+                        <div class="nfc-scanner-box">
+                            <div class="nfc-pulse-radar" id="nfc-recv-radar">
+                                <div class="radar-ring r1"></div>
+                                <div class="radar-ring r2"></div>
+                                <div class="radar-ring r3"></div>
+                                <div class="radar-center">📲</div>
+                            </div>
+                            <h4 id="nfc-recv-status-title" style="margin-top:1rem;">Lecteur NFC en attente</h4>
+                            <p class="text-muted" id="nfc-recv-status-desc" style="font-size:0.85rem;">
+                                Cliquez sur Démarrer pour écouter les tags et appareils NFC à proximité.
+                            </p>
+                            <div class="nfc-scan-actions" style="margin-top:1.2rem; display:flex; gap:0.5rem; justify-content:center;">
+                                <button class="btn primary" id="nfc-start-scan-btn">📡 Démarrer la lecture NFC</button>
+                                <button class="btn danger hidden" id="nfc-stop-scan-btn">Arrêter la lecture</button>
+                            </div>
+                        </div>
+
+                        <!-- Received Records List -->
+                        <div class="nfc-history-section hidden" id="nfc-history-section" style="margin-top:1.5rem;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.8rem;">
+                                <h3 style="font-size:1rem;">Données reçues via NFC (<span id="nfc-records-count">0</span>)</h3>
+                                <button class="btn secondary small" id="nfc-clear-history-btn">Effacer</button>
+                            </div>
+                            <div class="nfc-cards-list" id="nfc-cards-list"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- ======== TAB: URL Share ======== -->
                 <div class="tab-pane" id="tab-url">
                     <!-- Drop Zone -->
@@ -271,33 +412,6 @@
                                 <input type="password" id="url-password" placeholder="Enter encryption password">
                             </div>
 
-                            <!-- Advanced -->
-                            <div class="advanced-toggle" id="url-advanced-toggle">
-                                <span>Advanced Options</span>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                            </div>
-
-                            <div class="advanced-panel hidden" id="url-advanced-panel">
-                                <div class="setting-row">
-                                    <label>💣 Time Bomb</label>
-                                    <select id="url-timebomb">
-                                        <option value="0">Disabled</option>
-                                        <option value="5">5 Minutes</option>
-                                        <option value="60">1 Hour</option>
-                                        <option value="1440">24 Hours</option>
-                                    </select>
-                                </div>
-                                <div class="setting-row">
-                                    <label>🎨 Vibe Share</label>
-                                    <select id="url-vibe">
-                                        <option value="default">Default</option>
-                                        <option value="cyberpunk">Cyberpunk</option>
-                                        <option value="sunset">Sunset</option>
-                                        <option value="matrix">The Matrix</option>
-                                        <option value="zen">Zen Garden</option>
-                                    </select>
-                                </div>
-                            </div>
                         </div>
 
                         <button id="url-generate-btn" class="btn primary" style="margin-top:1.2rem;">Generate Link</button>
@@ -413,154 +527,6 @@
                         <button class="btn primary hidden" id="qrs-recv-download-btn" style="margin-top:1rem;">Download File</button>
                     </div>
                 </div>
-
-                <!-- ======== TAB: Audio ======== -->
-                <div class="tab-pane" id="tab-audio">
-                    <div class="mode-selector">
-                        <button class="mode-btn active" data-audio-mode="send">
-                            <span class="mode-icon">🔉</span>
-                            <span class="mode-label">Transmit</span>
-                        </button>
-                        <button class="mode-btn" data-audio-mode="receive">
-                            <span class="mode-icon">🎙️</span>
-                            <span class="mode-label">Listen</span>
-                        </button>
-                    </div>
-
-                    <!-- Audio Send -->
-                    <div id="audio-send-view">
-                        <div class="input-group">
-                            <input type="text" id="audio-send-text" placeholder="Enter text or paste URL to transmit via sound...">
-                        </div>
-
-                        <label class="toggle-switch" style="margin-top:0.75rem;">
-                            <input type="checkbox" id="audio-encrypt-toggle">
-                            <span class="slider"></span>
-                            <span class="label-text">Encrypt (AES-256-GCM)</span>
-                        </label>
-                        <div class="input-group hidden" id="audio-password-group">
-                            <input type="password" id="audio-password" placeholder="Encryption password">
-                        </div>
-
-                        <div class="audio-visualizer-container" style="margin-top:1rem;">
-                            <canvas id="audio-send-canvas" width="400" height="120"></canvas>
-                        </div>
-                        <div class="setting-row" style="margin-top:0.5rem;">
-                            <label>Protocol</label>
-                            <select id="audio-protocol">
-                                <option value="audible_fast">Audible Fast</option>
-                                <option value="audible_normal">Audible Normal</option>
-                                <option value="ultrasound_fast" selected>Ultrasound Fast</option>
-                                <option value="ultrasound_normal">Ultrasound Normal</option>
-                            </select>
-                        </div>
-                        <button class="btn primary" id="audio-send-btn" style="margin-top:1rem;" disabled>
-                            Transmit via Sound
-                        </button>
-                        <p class="status-msg info hidden" id="audio-send-status"></p>
-                    </div>
-
-                    <!-- Audio Receive -->
-                    <div class="hidden" id="audio-recv-view">
-                        <div class="audio-visualizer-container">
-                            <canvas id="audio-recv-canvas" width="400" height="120"></canvas>
-                        </div>
-                        <div class="audio-status" id="audio-recv-output">Waiting to start listening...</div>
-                        <div class="audio-controls">
-                            <button class="btn primary" id="audio-start-listen-btn">Start Listening</button>
-                            <button class="btn danger hidden" id="audio-stop-listen-btn">Stop</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ======== TAB: Color Stream ======== -->
-                <div class="tab-pane" id="tab-color">
-                    <div class="mode-selector">
-                        <button class="mode-btn active" data-color-mode="send">
-                            <span class="mode-icon">🌈</span>
-                            <span class="mode-label">Broadcast</span>
-                        </button>
-                        <button class="mode-btn" data-color-mode="receive">
-                            <span class="mode-icon">📷</span>
-                            <span class="mode-label">Scan</span>
-                        </button>
-                    </div>
-
-                    <!-- Color Send -->
-                    <div id="color-send-view">
-                        <div class="input-group">
-                            <input type="text" id="color-send-text" placeholder="Enter text to transmit via color stream...">
-                        </div>
-
-                        <label class="toggle-switch" style="margin-top:0.75rem;">
-                            <input type="checkbox" id="color-encrypt-toggle">
-                            <span class="slider"></span>
-                            <span class="label-text">Encrypt (AES-256-GCM)</span>
-                        </label>
-                        <div class="input-group hidden" id="color-password-group">
-                            <input type="password" id="color-password" placeholder="Encryption password">
-                        </div>
-
-                        <div class="color-stream-display" style="margin-top:1rem;">
-                            <canvas id="color-send-canvas"></canvas>
-                        </div>
-                        <div class="setting-row" style="margin-top:0.5rem;">
-                            <label>Speed</label>
-                            <select id="color-speed">
-                                <option value="100">Slow (100ms)</option>
-                                <option value="50" selected>Medium (50ms)</option>
-                                <option value="25">Fast (25ms)</option>
-                            </select>
-                        </div>
-                        <button class="btn primary" id="color-send-btn" style="margin-top:1rem;">Start Color Stream</button>
-                        <button class="btn danger hidden" id="color-stop-btn" style="margin-top:0.5rem;">Stop</button>
-                    </div>
-
-                    <!-- Color Receive -->
-                    <div class="hidden" id="color-recv-view">
-                        <div class="camera-scanner">
-                            <video id="color-camera-video" autoplay playsinline muted></video>
-                        </div>
-                        <div class="audio-status" id="color-recv-output" style="margin-top:1rem;">Point camera at the color stream...</div>
-                        <div class="audio-controls">
-                            <button class="btn primary" id="color-start-scan-btn">Start Scanning</button>
-                            <button class="btn danger hidden" id="color-stop-scan-btn">Stop</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ======== TAB: Bluetooth Assist ======== -->
-                <div class="tab-pane" id="tab-bluetooth">
-                    <div class="mode-selector">
-                        <button class="mode-btn active" data-bluetooth-mode="send">Sender</button>
-                        <button class="mode-btn" data-bluetooth-mode="receive">Receiver</button>
-                    </div>
-
-                    <!-- Bluetooth Send View -->
-                    <div id="bluetooth-send-view">
-                        <div class="p2p-connect-box">
-                            <h3>Transmit via Bluetooth</h3>
-                            <p class="text-muted" style="margin-bottom:1rem;">Send text, URL, or your P2P Room ID directly via BLE.</p>
-                            <textarea id="bluetooth-send-text" class="audio-input" placeholder="Type message or paste URL/ID here..."></textarea>
-                            
-                            <button class="btn primary" id="bluetooth-send-btn" style="width:100%; margin-top:1rem;">Scan & Connect to Peer</button>
-                        </div>
-                    </div>
-
-                    <!-- Bluetooth Receive View -->
-                    <div id="bluetooth-recv-view" class="hidden">
-                        <div class="p2p-connect-box">
-                            <h3 style="color: var(--accent-cyan);">Browser Limitation</h3>
-                            <p class="text-muted" style="margin: 1rem 0; font-size: 0.9rem; line-height: 1.5;">
-                                Web browsers (Chrome, Edge, etc.) have strict security sandboxes and can only act as a <strong>Bluetooth Client (Sender)</strong>. They cannot act as a <strong>Bluetooth Server (Receiver)</strong> to accept connections from other phones.
-                            </p>
-                            <p class="text-muted" style="margin-bottom: 1.5rem; font-size: 0.9rem; line-height: 1.5;">
-                                To transfer files between two browsers outside of WiFi (e.g. 4G/5G), please use the <strong>P2P Mode</strong> which is designed exactly for this!
-                            </p>
-                            <button class="btn secondary" style="width: 100%;" onclick="document.querySelector('[data-tab=\'tab-p2p\']').click()">Switch to P2P Mode</button>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
 
@@ -603,6 +569,30 @@
             </div>
         </section>
 
+        <!-- NFC Tap Modal (for P2P and Direct Tap) -->
+        <div class="overlay hidden" id="nfc-tap-modal">
+            <div class="modal-content scanner-modal-box">
+                <button class="close-btn" id="nfc-modal-close-btn">&times;</button>
+                <div class="nfc-pulse-radar" style="margin: 0.5rem auto 1.2rem;">
+                    <div class="radar-ring r1"></div>
+                    <div class="radar-ring r2"></div>
+                    <div class="radar-ring r3"></div>
+                    <div class="radar-center" id="nfc-modal-icon">📲</div>
+                </div>
+                <h3 id="nfc-modal-title" style="margin-bottom:0.4rem;">Approchez votre appareil</h3>
+                <p class="text-muted" id="nfc-modal-desc" style="font-size:0.85rem; margin-bottom:1.2rem;">
+                    Tenez le dos d'un autre smartphone ou d'un badge NFC contre cet appareil...
+                </p>
+                <div id="nfc-modal-payload-preview" class="nfc-payload-badge" style="margin-bottom:1.2rem;">
+                    <span id="nfc-modal-payload-text">Partage du Salon P2P</span>
+                </div>
+                <p class="status-msg info" id="nfc-modal-status">En attente de contact NFC...</p>
+                <button class="btn secondary" id="nfc-modal-cancel-btn" style="margin-top:1.2rem; width:100%;">
+                    Annuler
+                </button>
+            </div>
+        </div>
+
         <!-- Universal QR Scanner Modal -->
         <div class="overlay hidden" id="qr-scanner-modal">
             <div class="modal-content scanner-modal-box">
@@ -626,16 +616,14 @@
     <!-- Scripts -->
     <script src="lib/peerjs.min.js"></script>
     <script src="p2p.js"></script>
-    <script src="audio.js"></script>
+    <script src="nfc.js"></script>
     <script src="qrstream.js"></script>
-    <script src="colorstream.js"></script>
-    <script src="bluetooth.js"></script>
     <script src="features.js"></script>
     <script src="script.js"></script>
 
-    <!-- Service Worker Registration -->
+    <!-- Service Worker Registration (Guarded for supported origins: HTTPS or localhost) -->
     <script>
-        if ('serviceWorker' in navigator) {
+        if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
                     .then(registration => {
